@@ -50,6 +50,15 @@ test("A-share historical simulation enforces lots and T+1",()=>{
   stepSimulation(sim,1);
   executeSimulationTrade(sim,{side:"sell",qty:100,price:11,date:"2020-01-03",feeRate:0});
   assert.equal(sim.position.qty,0);
+  assert.equal(sim.currency,"CNY");
+});
+
+test("US replay uses USD account units and exchange suffixes still enforce A-share lots",()=>{
+  const us=createSimulation({symbol:"AAPL",capital:1000,bars});
+  assert.equal(us.currency,"USD");
+  const ash=createSimulation({symbol:"600000.SS",assetType:"stock",capital:100000,bars});
+  executeSimulationTrade(ash,{side:"buy",qty:150,price:10,date:"2020-01-02",feeRate:0});
+  assert.equal(ash.position.qty,100);
 });
 
 test("date jump never exposes data after target date",()=>{
