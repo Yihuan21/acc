@@ -25,7 +25,8 @@ export class DataAPI{
     return{symbol:code,name:"基金 "+code,price:last.close,change:last.close-prev.close,changePct:prev.close?(last.close/prev.close-1)*100:0,high:last.close,low:last.close,currency:"CNY",time:new Date(last.date+"T00:00:00").getTime(),assetType:"fund"};
   }
   async quote(symbol,{assetType="auto"}={}){
-    if(assetType==="fund" && /^\\d{6}$/.test(String(symbol)))return this.fundQuote(String(symbol));\n    const path=this.base?"/api/yahoo":"/v8/finance/chart/"+encodeURIComponent(symbol);
+    if(assetType==="fund" && /^\\d{6}$/.test(String(symbol)))return this.fundQuote(String(symbol));
+    const path=this.base?"/api/yahoo":"/v8/finance/chart/"+encodeURIComponent(symbol);
     const j=await this.request(path,this.base?{symbol,range:"1d",interval:"1m"}:{range:"1d",interval:"1m"});
     const m=j.chart?.result?.[0];if(!m)throw Error("找不到该标的");
     const q=m.meta||{},p=Number(q.regularMarketPrice);if(!Number.isFinite(p))throw Error("接口未返回价格");
