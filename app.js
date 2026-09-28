@@ -1,4 +1,4 @@
-import {DataAPI} from "./data.js?v=20260928-16";
+import {DataAPI} from "./data.js?v=20260928-17";
 import {runBacktest} from "./backtest.js?v=20260928-15";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260928-02";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
