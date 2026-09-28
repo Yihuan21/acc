@@ -1,5 +1,5 @@
-import {DataAPI} from "./data.js?v=20260928-3";
-import {runBacktest} from "./backtest.js?v=20260928-3";
+import {DataAPI} from "./data.js?v=20260928-4";
+import {runBacktest} from "./backtest.js?v=20260928-4";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
@@ -17,7 +17,10 @@ state.initialCash=Number.isFinite(Number(state.initialCash))?Number(state.initia
 const save=()=>localStorage.setItem("invest-sim",JSON.stringify(state));
 const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),2600)};
 const api=()=>new DataAPI(state.settings);
-function go(id){$$(".page").forEach(x=>x.classList.toggle("active",x.id===id));$$(".tab").forEach(x=>x.classList.toggle("active",x.dataset.go===id));render();scrollTo(0,0)}
+window.addEventListener("error",e=>{if(e?.message)toast("应用错误："+e.message)});
+window.addEventListener("unhandledrejection",e=>{const m=e?.reason?.message||String(e?.reason||"");if(m)toast("操作失败："+m)});
+
+function go(id){const page=$("#"+id);if(!page)return toast("页面加载异常："+id);$(".page").forEach(x=>x.classList.toggle("active",x.id===id));$(".tab").forEach(x=>x.classList.toggle("active",x.dataset.go===id));render();window.scrollTo({top:0,behavior:"instant"})}
 $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
 function assetType(raw){return String(raw||"auto").toLowerCase()}
 function assetLabel(t){return t==="fund"?"基金":t==="etf"?"ETF":t==="stock"?"股票":"标的"}
@@ -47,4 +50,7 @@ $("#importAccount").onchange=async e=>{try{const x=JSON.parse(await e.target.fil
 $("#resetBtn").onclick=()=>{if(confirm("确定重置模拟账户？")){state.cash=state.initialCash;state.positions={};state.trades=[];save();render();toast("账户已重置")}};
 $("#refreshBtn").onclick=async()=>{const ps=Object.values(state.positions);if(!ps.length)return toast("暂无持仓");let ok=0,fail=0;for(const p of ps){try{const q=await quote(p.symbol,p.assetType||"auto");p.price=q.price;p.currency=q.currency;p.assetType=q.assetType||p.assetType;ok++}catch{fail++}}save();render();toast(fail?("刷新完成："+ok+" 个成功，"+fail+" 个失败"):("刷新完成："+ok+" 个标的"))};
 $("#settingsForm").onsubmit=e=>{e.preventDefault();state.settings.apiBase=$("#apiBase").value.trim().replace(/\/$/,"");state.settings.usdCny=Math.max(0.1,Number($("#usdCny").value)||7.2);const n=Number($("#initialCash").value);if(n>0&&!state.trades.length){state.initialCash=n;state.cash=n}save();toast("设置已保存")};
-$("#apiBase").value=state.settings.apiBase||"";$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-5);$("#btStart").value=iso(start);$("#btEnd").value=end;render();if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});
+$("#apiBase").value=state.settings.apiBase||"";$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-5);$("#btStart").value=iso(start);$("#btEnd").value=end;render();
+document.documentElement.classList.add("app-ready");
+if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{});
+
