@@ -42,8 +42,8 @@ function positionValue(){return Object.values(state.positions).reduce((a,p)=>a+(
 function renderSimulation(){
   const s=state.simulation,empty=$("#simEmpty"),wrap=$("#simWorkspace");
   if(!empty||!wrap)return;
-  if(!s){empty.hidden=false;wrap.hidden=true;return}
-  empty.hidden=true;wrap.hidden=false;
+  if(!s){empty.hidden=false;wrap.hidden=true;$("#simLoadForm").hidden=false;return}
+  empty.hidden=true;wrap.hidden=false;$("#simLoadForm").hidden=true;
   const bar=currentBar(s),eq=simulationEquity(s),ret=simulationReturn(s);
   $("#simDate").textContent=bar?.date||"—";
   $("#simPrice").textContent=bar?num(bar.close):"—";
@@ -57,7 +57,7 @@ function renderSimulation(){
   $("#simAvg").textContent=num(s.position?.avg||0);
   $("#simProgress").max=Math.max(1,s.bars.length-1);$("#simProgress").value=s.currentIndex;
   $("#simProgressText").textContent=(s.currentIndex+1)+" / "+s.bars.length;
-  $("#simRangeInfo").textContent="历史数据："+s.bars[0].date+" → "+s.bars.at(-1).date+" · 当前仅可见至 "+bar.date+" · 共 "+s.bars.length+" 个交易日";
+  $("#simRangeInfo").textContent="当前已解锁："+(s.currentIndex+1)+" 个交易日 · 当前时点 "+bar.date+" · 后续数据未解锁";
   $("#simTradePrice").value=bar?String(bar.close):"";
   $("#simKline").innerHTML=klineSVG(visibleBars(s));
   $("#simTrades").innerHTML=s.trades.length?s.trades.slice().reverse().map(t=>'<div class="row"><span><b>'+(t.side==="buy"?"买入":"卖出")+' '+s.symbol+'</b><small>'+t.date+' · '+num(t.qty)+' × '+num(t.price)+' · 费用 '+num(t.fee)+'</small></span><span>'+money(t.gross,s.currency)+'</span></div>').join(""):'<div class="empty">当前历史时点还没有交易</div>';
