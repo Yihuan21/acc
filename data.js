@@ -14,13 +14,24 @@ export class DataAPI {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      let response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } catch (error) {
+        if (!this.base && /^https:\/\/(query1|query2)\.finance\.yahoo\.com/.test(url.origin + url.pathname)) {
+          throw new Error("行情接口被浏览器网络策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
+        }
+        if (!this.base && url.hostname === "api.fund.eastmoney.com") {
+          throw new Error("基金接口被浏览器跨域策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
+        }
+        throw error;
+      }
       if (!response.ok) throw new Error("数据接口 HTTP " + response.status);
       const json = await response.json();
       if (json?.chart?.error) throw new Error(json.chart.error.description || "行情接口返回错误");
       return json;
     } catch (error) {
-      if (error.name === "AbortError") throw new Error("数据接口超时");
+      if (error.name === "AbortError") throw new Error("数据接口超时；请检查 Worker API 地址和网络连接");
       throw error;
     } finally {
       clearTimeout(timer);
