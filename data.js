@@ -1,7 +1,7 @@
 export class DataAPI{
   constructor(settings={}){this.s=settings;this.base=String(settings.apiBase||"").replace(/\/$/,"")}
   async request(path,params={}){
-    const url=new URL(this.base?this.base+path:"https://query1.finance.yahoo.com"+path);
+    const url=new URL(/^https?:\\/\\//.test(path)?path:(this.base?this.base+path:"https://query1.finance.yahoo.com"+path));
     for(const [k,v] of Object.entries(params))if(v!==undefined&&v!==null&&v!=="")url.searchParams.set(k,v);
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
     try{const r=await fetch(url,{signal:controller.signal});if(!r.ok)throw Error("数据接口 HTTP "+r.status);const j=await r.json();if(j?.chart?.error)throw Error(j.chart.error.description||"行情接口返回错误");return j}catch(e){if(e.name==="AbortError")throw Error("数据接口超时");throw e}finally{clearTimeout(timer)}
