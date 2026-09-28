@@ -1,6 +1,6 @@
-import {DataAPI} from "./data.js?v=20260928-15";
-import {runBacktest} from "./backtest.js?v=20260928-14";
-import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260928-01";
+import {DataAPI} from "./data.js?v=20260928-16";
+import {runBacktest} from "./backtest.js?v=20260928-15";
+import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260928-02";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
@@ -154,7 +154,7 @@ $("#importAccount").onchange=async e=>{try{const x=JSON.parse(await e.target.fil
 $("#resetBtn").onclick=()=>{if(confirm("确定重置模拟账户？")){state.cash=state.initialCash;state.positions={};state.trades=[];stopSimulationPlayback();state.simulation=null;save();render();toast("账户已重置")}};
 $("#refreshBtn").onclick=async()=>{const ps=Object.values(state.positions);if(!ps.length)return toast("暂无持仓");let ok=0,fail=0;for(const p of ps){try{const q=await quote(p.symbol,p.assetType||"auto");p.price=q.price;p.currency=q.currency;p.assetType=q.assetType||p.assetType;ok++}catch{fail++}}save();render();toast(fail?("刷新完成："+ok+" 个成功，"+fail+" 个失败"):("刷新完成："+ok+" 个标的"))};
 $("#settingsForm").onsubmit=async e=>{e.preventDefault();state.settings.apiBase=$("#apiBase").value.trim().replace(/\/$/,"")||BUILTIN_API;state.settings.usdCny=Math.max(0.1,Number($("#usdCny").value)||7.2);const n=Number($("#initialCash").value);if(n>0&&!state.trades.length){state.initialCash=n;state.cash=n}save();toast("设置已保存");try{const r=await fetch(state.settings.apiBase+"/api/health",{cache:"no-store",signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error("接口返回 HTTP "+r.status);toast("设置已保存，数据接口正常")}catch(x){toast("设置已保存；代理暂不可用，实时行情需代理，模拟交易仍可手动填写成交价")}};
-$("#apiBase").value=state.settings.apiBase||BUILTIN_API;$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-40);$("#btStart").value=iso(start);$("#btEnd").value=end;render();
+$("#apiBase").value=state.settings.apiBase||BUILTIN_API;$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-40);$("#btStart").value=iso(start);$("#btEnd").value=end;const simStart=new Date("2020-01-01T00:00:00");$("#simStart").value=iso(simStart);$("#simEnd").value=end;render();
 document.documentElement.classList.add("app-ready");
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{});
 
