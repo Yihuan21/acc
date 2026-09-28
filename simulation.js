@@ -18,11 +18,14 @@ export function createSimulation({symbol,assetType="auto",capital=100000,bars,st
   const clean=normalizeSimulationBars(bars);
   if(clean.length<2) throw new Error("历史数据不足，至少需要 2 个交易日");
   const cash=Number(capital);
+  const key=String(symbol||"").toUpperCase();
+  const currency=assetType==="fund"||/\.SS$|\.SZ$/.test(key)?"CNY":"USD";
   if(!Number.isFinite(cash)||cash<=0) throw new Error("初始资金必须大于 0");
   return {
     version:1,
-    symbol:String(symbol||"").toUpperCase(),
+    symbol:key,
     assetType:String(assetType||"auto"),
+    currency,
     initialCash:cash,
     cash,
     position:{qty:0,avg:0,price:clean[Math.max(0,Math.min(startIndex,clean.length-1))].close,lastBuyDate:""},
@@ -61,9 +64,10 @@ export function simulationReturn(sim){
   return initial?((simulationEquity(sim)/initial)-1)*100:0;
 }
 export function isAShareStock(symbol,assetType="auto"){
-  return (assetType==="stock"||assetType==="auto")&&/^(60|68|00|30)\d{4}$/.test(String(symbol||"").trim());
+  const s=String(symbol||"").trim().toUpperCase().replace(/\.(SS|SZ)$/,"");
+  return (assetType==="stock"||assetType==="auto")&&/^(60|68|00|30)\d{4}$/.test(s);
 }
-export function aShareLot(symbol){return /^68\d{4}$/.test(String(symbol||"").trim())?200:100;}
+export function aShareLot(symbol){const s=String(symbol||"").trim().toUpperCase().replace(/\.(SS|SZ)$/,"");return /^68\d{4}$/.test(s)?200:100;}
 
 export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,stampDutyRate=0.0005}={}){
   const bar=currentBar(sim);
@@ -98,7 +102,7 @@ export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,s
     }
   }
   sim.position.price=executionPrice;
-  const record={date:tradeDate,side,qty:quantity,price:executionPrice,gross,fee,cashAfter:sim.cash,positionQty:sim.position.qty,stampDuty:aShare&&side==="sell"?gross*Math.max(0,Number(stampDutyRate)||0):0};
+  const record={date:tradeDate,side,qty:quantity,price:executionPrice,gross,fee,currency:sim.currency,cashAfter:sim.cash,positionQty:sim.position.qty,stampDuty:aShare&&side==="sell"?gross*Math.max(0,Number(stampDutyRate)||0):0};
   sim.trades.push(record);
   return record;
 }
