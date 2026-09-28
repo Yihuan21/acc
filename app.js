@@ -61,7 +61,7 @@ function renderSimulation(){
   $("#simTradePrice").value=bar?String(bar.close):"";
   $("#simKline").innerHTML=klineSVG(visibleBars(s));
   $("#simTrades").innerHTML=s.trades.length?s.trades.slice().reverse().map(t=>'<div class="row"><span><b>'+(t.side==="buy"?"买入":"卖出")+' '+s.symbol+'</b><small>'+t.date+' · '+num(t.qty)+' × '+num(t.price)+' · 费用 '+num(t.fee)+'</small></span><span>'+money(t.gross,s.currency)+'</span></div>').join(""):'<div class="empty">当前历史时点还没有交易</div>';
-  $("#simPrev").disabled=s.currentIndex<=0;$("#simNext").disabled=s.currentIndex>=s.bars.length-1;
+  $("#simPrev").disabled=s.currentIndex<=0||s.trades.length>0;$("#simNext").disabled=s.currentIndex>=s.bars.length-1;
   $("#simStep5").disabled=s.currentIndex>=s.bars.length-1;$("#simStep20").disabled=s.currentIndex>=s.bars.length-1;
   $("#simPlay").textContent=s.playing?"暂停":"播放";
 }
@@ -125,8 +125,8 @@ async function loadHistoricalSimulation(){
     state.simulation=createSimulation({symbol:k,assetType:t,capital,bars});save();render();toast("历史模拟已加载："+bars[0].date+" → "+bars.at(-1).date);
   }catch(e){toast("历史模拟加载失败："+e.message)}
 }
-function simAdvance(delta){if(!state.simulation)return toast("请先加载历史模拟");stepSimulation(state.simulation,delta);save();render()}
-function simJump(){if(!state.simulation)return;const d=$("#simDatePicker").value;if(!d)return;jumpSimulationToDate(state.simulation,d);save();render()}
+function simAdvance(delta){if(!state.simulation)return toast("请先加载历史模拟");if(delta<0&&state.simulation.trades.length)return toast("已有历史交易，不能回到交易发生之前；如需重来请结束模拟");stepSimulation(state.simulation,delta);save();render()}
+function simJump(){if(!state.simulation)return;const d=$("#simDatePicker").value;if(!d)return;const target=state.simulation.bars.findIndex(b=>b.date>=d);if(state.simulation.trades.length&&target<state.simulation.currentIndex)return toast("已有历史交易，不能回到交易发生之前；如需重来请结束模拟");jumpSimulationToDate(state.simulation,d);save();render()}
 function stopSimulationPlayback(){if(state.simulation)state.simulation.playing=false;clearInterval(window.__simTimer);window.__simTimer=null}
 function toggleSimulationPlayback(){
   if(!state.simulation)return toast("请先加载历史模拟");
@@ -139,7 +139,7 @@ $("#simPrev").onclick=()=>simAdvance(-1);$("#simNext").onclick=()=>simAdvance(1)
 $("#simStep5").onclick=()=>simAdvance(5);$("#simStep20").onclick=()=>simAdvance(20);$("#simPlay").onclick=toggleSimulationPlayback;
 $("#simJumpBtn").onclick=simJump;
 $("#simReset").onclick=()=>{stopSimulationPlayback();state.simulation=null;save();render();toast("历史模拟已清除")};
-$("#simProgress").oninput=e=>{if(!state.simulation)return;state.simulation.currentIndex=Math.max(0,Math.min(state.simulation.bars.length-1,Number(e.target.value)||0));state.simulation.position.price=currentBar(state.simulation).close;save();render()};
+$("#simProgress").oninput=e=>{if(!state.simulation)return;const target=Math.max(0,Math.min(state.simulation.bars.length-1,Number(e.target.value)||0));if(state.simulation.trades.length&&target<state.simulation.currentIndex){render();return}state.simulation.currentIndex=target;state.simulation.position.price=currentBar(state.simulation).close;save();render()};
 $("#simTradeForm").onsubmit=e=>{
   e.preventDefault();const s=state.simulation;if(!s)return toast("请先加载历史模拟");
   const bar=currentBar(s),side=$("#simSide").value,qty=Number($("#simQtyInput").value),price=Number($("#simTradePrice").value)||bar?.close;
