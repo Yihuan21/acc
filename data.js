@@ -8,7 +8,7 @@ export class DataAPI {
     const isYahooProxy = path === "/api/yahoo";
     const isFundProxy = path === "/api/fund";
     const directTarget = isYahooProxy
-      ? "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(params.symbol || "")
+      ? "https://query2.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(params.symbol || "")
       : isFundProxy
         ? "https://api.fund.eastmoney.com/f10/lsjz"
         : path;
@@ -16,7 +16,7 @@ export class DataAPI {
     const buildUrl = target => {
       const url = new URL(/^https?:\/\//.test(target)
         ? target
-        : (this.base ? this.base + target : "https://query1.finance.yahoo.com" + target));
+        : (this.base ? this.base + target : "https://query2.finance.yahoo.com" + target));
       for (const [k, v] of Object.entries(params)) {
         if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
       }
