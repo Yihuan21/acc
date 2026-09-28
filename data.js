@@ -12,7 +12,7 @@ export class DataAPI{
     const params=this.base?{fundCode:code,startDate:from,endDate:to,pageIndex:1,pageSize:5000}:{callback:"",fundCode:code,startDate:from,endDate:to,pageIndex:1,pageSize:5000};
     const url=this.base?null:new URL(path);
     if(url)for(const [k,v] of Object.entries(params))if(v)url.searchParams.set(k,v);
-    const j=await this.request(this.base?path:url.pathname+url.search,{});
+    const j=await this.request(this.base?path:url.toString(),{});
     const list=j?.Data?.LSJZList||j?.data?.LSJZList||j?.LSJZList||[];
     const rows=list.map(x=>({date:String(x.FSRQ||x.date||"").slice(0,10),open:Number(x.DWJZ||x.close),high:Number(x.DWJZ||x.close),low:Number(x.DWJZ||x.close),close:Number(x.DWJZ||x.close),volume:0})).filter(x=>/^\\d{4}-\\d{2}-\\d{2}$/.test(x.date)&&Number.isFinite(x.close)&&x.close>0);
     rows.sort((a,b)=>a.date.localeCompare(b.date));
