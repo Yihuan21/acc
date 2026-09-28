@@ -10,3 +10,5 @@ test("benchmark starts on executable day",()=>{const r=runBacktest(bars,{capital
 
 test("lot size prevents fractional execution",()=>{const r=runBacktest(bars,{capital:1000,strategy:"buyhold",feeRate:0,slippage:0,lotSize:100});assert.equal(r.tradeLog.length,0);});
 test("minimum and asymmetric fees are applied",()=>{const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,buyFeeRate:.001,sellFeeRate:.002,minFee:5,stampDutyRate:.001});assert(r.tradeLog[0].fee>=5);});
+
+test("benchmark return is exposed",()=>{const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,slippage:0});assert.equal(r.benchmarkReturn,(r.benchmark/10000-1)*100);});
