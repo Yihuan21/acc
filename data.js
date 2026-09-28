@@ -157,57 +157,52 @@ export class DataAPI {
     if (assetType === "fund" && /^\d{6}$/.test(String(symbol))) {
       return this.fundHistory(String(symbol), start, end);
     }
+    const startDate=new Date(start||"2000-01-01T00:00:00");
+    const endDate=new Date(end||new Date());
+    if(!Number.isFinite(startDate.getTime())||!Number.isFinite(endDate.getTime())||startDate>=endDate)throw new Error("日期范围无效");
 
-    const from = Math.floor(new Date(start || "2000-01-01T00:00:00").getTime() / 1000);
-    const to = Math.floor(new Date(end || new Date()).getTime() / 1000) + 86400;
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
-      throw new Error("日期范围无效");
+    const fetchChunk=async(a,b)=>{
+      const from=Math.floor(a.getTime()/1000),to=Math.floor(b.getTime()/1000)+86400;
+      const path=this.base?"/api/yahoo":"/v8/finance/chart/"+encodeURIComponent(symbol);
+      const params={symbol,period1:from,period2:to,interval:"1d",events:"div,splits"};
+      const json=await this.request(path,params);
+      const result=json?.chart?.result?.[0];
+      if(!result)throw new Error("历史数据为空");
+      const quote=result.indicators?.quote?.[0]||{};
+      const adjusted=result.indicators?.adjclose?.[0]?.adjclose||[];
+      return (result.timestamp||[]).map((timestamp,index)=>{
+        const rawOpen=Number(quote.open?.[index]),rawHigh=Number(quote.high?.[index]),rawLow=Number(quote.low?.[index]),rawClose=Number(quote.close?.[index]),adjClose=Number(adjusted[index]);
+        const factor=Number.isFinite(rawClose)&&rawClose>0&&Number.isFinite(adjClose)&&adjClose>0?adjClose/rawClose:1;
+        return {
+          date:new Date(timestamp*1000).toISOString().slice(0,10),
+          open:rawOpen,high:rawHigh,low:rawLow,close:rawClose,
+          adjOpen:Number.isFinite(rawOpen)&&rawOpen>0?rawOpen*factor:rawOpen,
+          adjHigh:Number.isFinite(rawHigh)&&rawHigh>0?rawHigh*factor:rawHigh,
+          adjLow:Number.isFinite(rawLow)&&rawLow>0?rawLow*factor:rawLow,
+          adjClose:Number.isFinite(adjClose)&&adjClose>0?adjClose:rawClose,
+          volume:Number(quote.volume?.[index])||0
+        };
+      }).filter(row=>/^\d{4}-\d{2}-\d{2}$/.test(row.date)&&Number.isFinite(row.close)&&row.close>0);
+    };
+
+    const chunks=[];
+    const spanDays=(endDate-startDate)/86400000;
+    if(spanDays>3650){
+      let cursor=new Date(startDate);
+      while(cursor<endDate){
+        const next=new Date(cursor);next.setFullYear(next.getFullYear()+8);
+        const chunkEnd=next<endDate?next:endDate;
+        chunks.push(await fetchChunk(cursor,chunkEnd));
+        cursor=new Date(chunkEnd.getTime()+86400000);
+      }
+    }else{
+      chunks.push(await fetchChunk(startDate,endDate));
     }
-
-    const path = this.base ? "/api/yahoo" : "/v8/finance/chart/" + encodeURIComponent(symbol);
-    const params = this.base
-      ? { symbol, period1: from, period2: to, interval: "1d", events: "div,splits" }
-      : { period1: from, period2: to, interval: "1d", events: "div,splits" };
-    const json = await this.request(path, params);
-    const result = json?.chart?.result?.[0];
-    if (!result) throw new Error("历史数据为空");
-
-    const quote = result.indicators?.quote?.[0] || {};
-    const adjusted = result.indicators?.adjclose?.[0]?.adjclose || [];
-    const rows = (result.timestamp || []).map((timestamp, index) => {
-      const rawOpen = Number(quote.open?.[index]);
-      const rawHigh = Number(quote.high?.[index]);
-      const rawLow = Number(quote.low?.[index]);
-      const rawClose = Number(quote.close?.[index]);
-      const adjClose = Number(adjusted[index]);
-      const factor = Number.isFinite(rawClose) && rawClose > 0 && Number.isFinite(adjClose) && adjClose > 0
-        ? adjClose / rawClose
-        : 1;
-      return {
-        date: new Date(timestamp * 1000).toISOString().slice(0, 10),
-        open: rawOpen,
-        high: rawHigh,
-        low: rawLow,
-        close: rawClose,
-        adjOpen: Number.isFinite(rawOpen) && rawOpen > 0 ? rawOpen * factor : rawOpen,
-        adjHigh: Number.isFinite(rawHigh) && rawHigh > 0 ? rawHigh * factor : rawHigh,
-        adjLow: Number.isFinite(rawLow) && rawLow > 0 ? rawLow * factor : rawLow,
-        adjClose: Number.isFinite(adjClose) && adjClose > 0 ? adjClose : rawClose,
-        volume: Number(quote.volume?.[index]) || 0
-      };
-    }).filter(row =>
-      /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
-      Number.isFinite(row.close) &&
-      row.close > 0
-    );
-
-    const seen = new Set();
-    const clean = rows.filter(row => {
-      if (seen.has(row.date)) return false;
-      seen.add(row.date);
-      return true;
+    const seen=new Set(),clean=chunks.flat().sort((a,b)=>a.date.localeCompare(b.date)).filter(row=>{
+      if(row.date<startDate.toISOString().slice(0,10)||row.date>endDate.toISOString().slice(0,10)||seen.has(row.date))return false;
+      seen.add(row.date);return true;
     });
-    if (clean.length < 2) throw new Error("历史数据不足");
+    if(clean.length<2)throw new Error("历史数据不足");
     return clean;
   }
 }
