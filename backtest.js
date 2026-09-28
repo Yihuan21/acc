@@ -1,0 +1,25 @@
+export const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
+export const stdev=a=>{if(a.length<2)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/(a.length-1))};
+export const maxDrawdown=curve=>{let peak=-Infinity,dd=0,peakIndex=0,maxDuration=0;for(let i=0;i<curve.length;i++){if(curve[i]>peak){peak=curve[i];peakIndex=i}if(peak>0)dd=Math.max(dd,(peak-curve[i])/peak);maxDuration=Math.max(maxDuration,i-peakIndex)}return{maxDrawdown:dd,maxDuration}};
+const cleanBars=bars=>[...(bars||[])].filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&Number.isFinite(Number(x.close))&&Number(x.close)>0).map(x=>({date:x.date,open:Number.isFinite(Number(x.open))&&x.open>0?x.open:x.close,high:Number(x.high)||x.close,low:Number(x.low)||x.close,close:Number(x.close),volume:Number(x.volume)||0})).sort((a,b)=>a.date.localeCompare(b.date)).filter((x,i,a)=>i===0||x.date!==a[i-1].date);
+const sma=(bars,end,n)=>end-n+1<0?null:mean(bars.slice(end-n+1,end+1).map(x=>x.close));
+const rsi=(bars,end,n=14)=>{if(end<n)return null;let g=0,l=0;for(let i=end-n+1;i<=end;i++){const d=bars[i].close-bars[i-1].close;g+=Math.max(d,0);l+=Math.max(-d,0)}if(l===0)return 100;return 100-100/(1+(g/l))};
+export function runBacktest(raw,{capital=100000,strategy="buyhold",feeRate=0.0005,slippage=0.0005,position=1,riskFreeRate=0}={}){
+ const bars=cleanBars(raw);capital=Number(capital);feeRate=Math.max(0,Number(feeRate)||0);slippage=Math.max(0,Number(slippage)||0);position=Math.min(1,Math.max(.01,Number(position)||1));riskFreeRate=Number(riskFreeRate)||0;
+ if(bars.length<2)throw Error("至少需要 2 个有效交易日");if(!Number.isFinite(capital)||capital<=0)throw Error("初始资金必须大于 0");
+ let cash=capital,shares=0,entryCost=0,tradeLog=[],curve=[],lastSignal="";const buy=(p,n)=>{const px=p*(1+slippage),cost=px*n,fee=cost*feeRate;if(cost+fee>cash+1e-8)return false;cash-=cost+fee;shares+=n;entryCost+=cost+fee;tradeLog.push({date:bars[i].date,side:"buy",price:px,qty:n,fee});return true};const sell=(p,n)=>{if(n<=0)return false;const px=p*(1-slippage),gross=px*n,fee=gross*feeRate;cash+=gross-fee;shares-=n;entryCost=Math.max(0,entryCost-(entryCost*(n/(shares+n))));tradeLog.push({date:bars[i].date,side:"sell",price:px,qty:n,fee});return true};
+ let i=0;
+ for(i=0;i<bars.length;i++){
+   const b=bars[i];
+   if(i>0){
+     if(strategy==="buyhold"&&i===1){const n=(cash*position)/(b.open*(1+slippage)*(1+feeRate));if(n>0)buy(b.open,n)}
+     if(strategy==="dca"&&i%21===0){const budget=Math.min(cash,capital/12*position);const n=budget/(b.open*(1+slippage)*(1+feeRate));if(n>0)buy(b.open,n)}
+     if(strategy==="ma"&&i>=61){const fast=sma(bars,i-1,20),slow=sma(bars,i-1,60);if(fast>slow&&lastSignal!=="long"){if(shares>0){}else{const n=(cash*position)/(b.open*(1+slippage)*(1+feeRate));if(n>0)buy(b.open,n)}lastSignal="long"}else if(fast<slow&&lastSignal!=="flat"){if(shares>0)sell(b.open,shares);lastSignal="flat"}}
+     if(strategy==="rsi"&&i>=15){const v=rsi(bars,i-1,14);if(v<30&&lastSignal!=="long"){if(shares===0){const n=(cash*position)/(b.open*(1+slippage)*(1+feeRate));if(n>0)buy(b.open,n)}lastSignal="long"}else if(v>70&&lastSignal!=="flat"){if(shares>0)sell(b.open,shares);lastSignal="flat"}}
+   }
+   curve.push(cash+shares*b.close);
+ }
+ const final=curve.at(-1),daily=curve.slice(1).map((v,j)=>curve[j]>0?v/curve[j]-1:0),rfDaily=(1+riskFreeRate/100)**(1/252)-1,excess=daily.map(x=>x-rfDaily),vol=stdev(daily)*Math.sqrt(252),sh=stdev(excess)?mean(excess)/stdev(excess)*Math.sqrt(252):0;
+ const years=Math.max(1/365,(new Date(bars.at(-1).date)-new Date(bars[0].date))/31557600000),cum=(final/capital-1)*100,cagr=(final>0?(Math.pow(final/capital,1/years)-1)*100:-100),mdd=maxDrawdown(curve),benchmark=capital*(bars.at(-1).close/bars[0].close),buys=tradeLog.filter(x=>x.side==="buy"),sells=tradeLog.filter(x=>x.side==="sell");
+ return{bars,curve,final,cum,cagr,maxDrawdown:mdd.maxDrawdown*100,maxDrawdownDays:mdd.maxDuration,volatility:vol*100,sharpe:sh,trades:tradeLog.length,buys:buys.length,sells:sells.length,benchmark,alpha:cum-(benchmark/capital-1)*100,tradeLog};
+}
