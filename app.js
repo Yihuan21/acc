@@ -3,8 +3,17 @@ import {runBacktest} from "./backtest.js";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
-const state=JSON.parse(localStorage.getItem("invest-sim")||"null")||{cash:100000,initialCash:100000,positions:{},trades:[],recent:[],csv:{},settings:{apiBase:""}};
-state.settings||={apiBase:"",usdCny:7.2};state.settings.usdCny=Number(state.settings.usdCny)||7.2;state.positions||={};state.trades||=[];state.recent||=[];state.csv||={};
+const defaults={cash:100000,initialCash:100000,positions:{},trades:[],recent:[],csv:{},settings:{apiBase:"",usdCny:7.2}};
+let state;try{state=JSON.parse(localStorage.getItem("invest-sim")||"null")||structuredClone(defaults)}catch{state=structuredClone(defaults)}
+state.settings=state.settings&&typeof state.settings==="object"?state.settings:{};
+state.settings.apiBase=String(state.settings.apiBase||"").trim().replace(/\/$/,"");
+state.settings.usdCny=Number(state.settings.usdCny)||7.2;
+state.positions=state.positions&&typeof state.positions==="object"?state.positions:{};
+state.trades=Array.isArray(state.trades)?state.trades:[];
+state.recent=Array.isArray(state.recent)?state.recent:[];
+state.csv=state.csv&&typeof state.csv==="object"?state.csv:{};
+state.cash=Number.isFinite(Number(state.cash))?Number(state.cash):100000;
+state.initialCash=Number.isFinite(Number(state.initialCash))?Number(state.initialCash):state.cash;
 const save=()=>localStorage.setItem("invest-sim",JSON.stringify(state));
 const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),2600)};
 const api=()=>new DataAPI(state.settings);
@@ -12,7 +21,7 @@ function go(id){$$(".page").forEach(x=>x.classList.toggle("active",x.id===id));$
 $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
 function sym(raw){const s=String(raw||"").trim().toUpperCase();if(/^\d{6}$/.test(s)){if(/^(60|68|5)/.test(s))return s+".SS";if(/^(00|30|15|16|18)/.test(s))return s+".SZ"}return s}
 async function quote(s){return api().quote(sym(s))}
-async async function history(s,a,b){const k=sym(s),local=state.csv[k];if(local&&local.length){const x=local.filter(v=>(!a||v.date>=a)&&(!b||v.date<=b));if(x.length>1)return x}return api().history(k,a,b)}
+async function history(s,a,b){const k=sym(s),local=state.csv[k];if(local&&local.length){const x=local.filter(v=>(!a||v.date>=a)&&(!b||v.date<=b));if(x.length>1)return x}return api().history(k,a,b)}
 function positionValue(){return Object.values(state.positions).reduce((a,p)=>a+(p.currency==="USD"?p.qty*p.price*Number(state.settings.usdCny||7.2):p.qty*p.price),0)}
 function render(){
  const mv=positionValue(),tot=state.cash+mv;$("#cash").textContent=money(state.cash);$("#marketValue").textContent=money(mv);$("#totalAssets").textContent=money(tot);$("#portfolioCash").textContent=money(state.cash);$("#portfolioTotal").textContent=money(tot);
