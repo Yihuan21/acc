@@ -15,7 +15,7 @@ export function runBacktest(raw,{capital=100000,strategy="buyhold",feeRate=0.000
    if(i>0){
      if(strategy==="buyhold"&&i===1){const n=(cash*position)/(b.open*(1+slippage));buy(i,b.open,n)}
      if(strategy==="dca"&&i%21===0){const budget=Math.min(cash,capital/12*position);const n=budget/(b.open*(1+slippage));buy(i,b.open,n)}
-     if(strategy==="ma"&&i>=61){const fast=sma(bars,i-1,20),slow=sma(bars,i-1,60);if(fast>slow&&lastSignal!=="long"){if(shares===0){const n=(cash*position)/(b.open*(1+slippage));buy(i,b.open,n)}else if(fast<slow&&lastSignal!=="flat"){if(shares>0)sell(i,b.open,shares);lastSignal="flat"}}
+     if(strategy==="ma"&&i>=61){const fast=sma(bars,i-1,20),slow=sma(bars,i-1,60);if(fast>slow&&lastSignal!=="long"){if(shares===0){const n=(cash*position)/(b.open*(1+slippage));buy(i,b.open,n)}lastSignal="long"}else if(fast<slow&&lastSignal!=="flat"){if(shares>0)sell(i,b.open,shares);lastSignal="flat"}}
      if(strategy==="rsi"&&i>=15){const v=rsi(bars,i-1,14);if(v<30&&lastSignal!=="long"){if(shares===0){const n=(cash*position)/(b.open*(1+slippage));buy(i,b.open,n)}lastSignal="long"}else if(v>70&&lastSignal!=="flat"){if(shares>0)sell(i,b.open,shares);lastSignal="flat"}}
    }
    curve.push(cash+shares*b.close);
