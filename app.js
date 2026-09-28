@@ -20,7 +20,7 @@ const api=()=>new DataAPI(state.settings);
 window.addEventListener("error",e=>{if(e?.message)toast("应用错误："+e.message)});
 window.addEventListener("unhandledrejection",e=>{const m=e?.reason?.message||String(e?.reason||"");if(m)toast("操作失败："+m)});
 
-function go(id){const page=$("#"+id);if(!page)return toast("页面加载异常："+id);$(".page").forEach(x=>x.classList.toggle("active",x.id===id));$(".tab").forEach(x=>x.classList.toggle("active",x.dataset.go===id));render();window.scrollTo({top:0,behavior:"instant"})}
+function go(id){const page=$("#"+id);if(!page)return toast("页面加载异常："+id);$$(".page").forEach(x=>x.classList.toggle("active",x.id===id));$$(".tab").forEach(x=>x.classList.toggle("active",x.dataset.go===id));render();window.scrollTo({top:0,behavior:"instant"})}
 $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
 function assetType(raw){return String(raw||"auto").toLowerCase()}
 function assetLabel(t){return t==="fund"?"基金":t==="etf"?"ETF":t==="stock"?"股票":"标的"}
