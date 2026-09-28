@@ -12,7 +12,7 @@ input,select{font-size:16px}
 .form-grid label{min-width:0}
 .form-grid input,.form-grid select{min-height:46px}
 .search input,.search select,.search button{min-height:48px}
-.tabbar{bottom:0;padding-bottom:max(8px,calc(8px + env(safe-area-inset-bottom));)}
+.tabbar{bottom:0;padding-bottom:max(8px,calc(8px + env(safe-area-inset-bottom)));}
 .toast{bottom:calc(94px + env(safe-area-inset-bottom));max-width:min(92vw,680px);text-align:center}
 @media (min-width:768px){
   #app{max-width:1180px;padding-left:24px;padding-right:24px}
