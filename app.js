@@ -56,10 +56,10 @@ function klineSVG(bars){
     const top=Math.min(yyO,yyC),height=Math.max(1,Math.abs(yyC-yyO));
     return '<line class="'+cls+'" x1="'+xx+'" x2="'+xx+'" y1="'+yyH+'" y2="'+yyL+'"/><rect class="'+cls+'" x="'+(xx-body/2)+'" y="'+top+'" width="'+body+'" height="'+height+'"/>';
   }).join("");
-  const mk=(n,cls)=>{const vals=maValues(data,n);let p="";vals.forEach((v,i)=>{if(v!=null)p+=(p?" ":"")+"M "+x(i)+" "+y(v)+" L "+x(i)+" "+y(v)+" ";});return p?'<path class="'+cls+'" d="'+p.replace(/L ([^ ]+) ([^ ]+) /g,"L $1 $2 ").replace(/^(M [^ ]+ [^ ]+) L /,"M ").trim()+'"/>':""};
+
   const maPath=(n,cls)=>{const vals=maValues(data,n),pts=vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);return pts.length>1?'<polyline class="'+cls+'" points="'+pts.map(p=>p.join(",")).join(" ")+'"/>':""};
   const labels=[0,Math.floor(data.length/3),Math.floor(data.length*2/3),data.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>'<text class="kline-axis" text-anchor="middle" x="'+x(i)+'" y="'+(H-12)+'">'+data[i].date.slice(0,10)+'</text>').join("");
-  return '<div class="kline-scroll"><svg class="kline-svg" viewBox="0 0 '+W+' '+H" preserveAspectRatio="none" role="img" aria-label="日K线图">'+grid+candles+maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60")+labels+'</svg></div><div class="kline-legend"><span>■ MA5</span><span>■ MA20</span><span>■ MA60</span><span>红涨绿跌</span></div>';
+  return '<div class="kline-scroll"><svg class="kline-svg" viewBox="0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="日K线图">'+grid+candles+maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60")+labels+'</svg></div><div class="kline-legend"><span>■ MA5</span><span>■ MA20</span><span>■ MA60</span><span>红涨绿跌</span></div>';
 }
 async function loadKline(raw,t,range){
   const k=sym(raw,t),endDate=new Date(),startDate=new Date(endDate);
