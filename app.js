@@ -19,7 +19,9 @@ const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clea
 const api=()=>new DataAPI(state.settings);
 function go(id){$$(".page").forEach(x=>x.classList.toggle("active",x.id===id));$$(".tab").forEach(x=>x.classList.toggle("active",x.dataset.go===id));render();scrollTo(0,0)}
 $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
-function sym(raw){const s=String(raw||"").trim().toUpperCase();if(/^\d{6}$/.test(s)){if(/^(60|68|5)/.test(s))return s+".SS";if(/^(00|30|15|16|18)/.test(s))return s+".SZ"}return s}
+function assetType(raw){return String(raw||"auto").toLowerCase()}
+function assetLabel(t){return t==="fund"?"基金":t==="etf"?"ETF":t==="stock"?"股票":"标的"}
+function sym(raw,type="auto"){const s=String(raw||"").trim().toUpperCase();if(/^\d{6}$/.test(s)){if(type==="fund")return s;if(/^(60|68|5)/.test(s))return s+".SS";if(/^(00|30|15|16|18)/.test(s))return s+".SZ"}return s}
 async function quote(s,t="auto"){return api().quote(sym(s,t),{assetType:t})}
 async function history(s,a,b,t="auto"){const k=sym(s,t),local=state.csv[k];if(local&&local.length){const x=local.filter(v=>(!a||v.date>=a)&&(!b||v.date<=b));if(x.length>1)return x}return api().history(k,a,b,t)}
 function positionValue(){return Object.values(state.positions).reduce((a,p)=>a+(p.currency==="USD"?p.qty*p.price*Number(state.settings.usdCny||7.2):p.qty*p.price),0)}
