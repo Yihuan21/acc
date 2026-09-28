@@ -1,4 +1,4 @@
-const C="investment-lab-v7",A=["./","./index.html","./styles.css","./app.js?v=20260928-6","./data.js?v=20260928-6","./backtest.js?v=20260928-6","./manifest.webmanifest"];
+const C="investment-lab-v8",A=["./","./index.html","./styles.css","./app.js?v=20260928-8","./data.js?v=20260928-8","./backtest.js?v=20260928-8","./manifest.webmanifest"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(C).then(c=>c.addAll(A)).then(()=>self.skipWaiting())));
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener("fetch",e=>{
