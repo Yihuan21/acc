@@ -10,7 +10,7 @@ test("Yahoo history keeps raw OHLC and adjusted close separate", async ()=>{
       quote:[{open:[100,50],high:[110,55],low:[90,45],close:[100,50],volume:[1000,900]}],
       adjclose:[{adjclose:[80,40]}]
     }
-  }]}}});
+  }]}});
   const rows=await api.history("TEST","2024-01-01","2024-01-02");
   assert.equal(rows[0].close,100);
   assert.equal(rows[0].adjClose,80);
