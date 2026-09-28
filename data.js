@@ -5,31 +5,51 @@ export class DataAPI {
   }
 
   async request(path, params = {}) {
-    const url = new URL(/^https?:\/\//.test(path)
-      ? path
-      : (this.base ? this.base + path : "https://query1.finance.yahoo.com" + path));
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
-    }
+    const isYahooProxy = path === "/api/yahoo";
+    const isFundProxy = path === "/api/fund";
+    const directPath = isYahooProxy
+      ? "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(params.symbol || "")
+      : isFundProxy
+        ? "https://api.fund.eastmoney.com/f10/lsjz"
+        : path;
+    const buildUrl = target => {
+      const url = new URL(/^https?:\/\//.test(target)
+        ? target
+        : (this.base ? this.base + target : "https://query1.finance.yahoo.com" + target));
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
+      }
+      return url;
+    };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
-    try {
-      let response;
-      try {
-        response = await fetch(url, { signal: controller.signal });
-      } catch (error) {
-        if (!this.base && /^https:\/\/(query1|query2)\.finance\.yahoo\.com/.test(url.origin + url.pathname)) {
-          throw new Error("行情接口被浏览器网络策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
-        }
-        if (!this.base && url.hostname === "api.fund.eastmoney.com") {
-          throw new Error("基金接口被浏览器跨域策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
-        }
-        throw error;
-      }
+    const fetchJson = async url => {
+      const response = await fetch(url, { signal: controller.signal });
       if (!response.ok) throw new Error("数据接口 HTTP " + response.status);
       const json = await response.json();
       if (json?.chart?.error) throw new Error(json.chart.error.description || "行情接口返回错误");
       return json;
+    };
+    try {
+      const primary = buildUrl(path);
+      try {
+        return await fetchJson(primary);
+      } catch (primaryError) {
+        if (this.base && (isYahooProxy || isFundProxy)) {
+          try {
+            return await fetchJson(buildUrl(directPath));
+          } catch (fallbackError) {
+            throw new Error("数据接口不可用（代理：" + (primaryError?.message || primaryError) + "；直连：" + (fallbackError?.message || fallbackError) + "）");
+          }
+        }
+        if (!this.base && isYahooProxy) {
+          throw new Error("行情接口被浏览器网络策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
+        }
+        if (!this.base && isFundProxy) {
+          throw new Error("基金接口被浏览器跨域策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
+        }
+        throw primaryError;
+      }
     } catch (error) {
       if (error.name === "AbortError") throw new Error("数据接口超时；请检查 Worker API 地址和网络连接");
       throw error;
