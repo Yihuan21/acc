@@ -1,5 +1,5 @@
-import {DataAPI} from "./data.js?v=20260928-8";
-import {runBacktest} from "./backtest.js?v=20260928-8";
+import {DataAPI} from "./data.js?v=20260928-10";
+import {runBacktest} from "./backtest.js?v=20260928-10";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
@@ -44,8 +44,17 @@ function render(){
 $("#quoteForm").onsubmit=async e=>{e.preventDefault();const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(!raw)return toast("请输入代码");try{toast("正在获取行情…");const q=await quote(raw,t),k=sym(raw,t),c=q.currency||((t==="fund"||/^\\d{6}$/.test(raw))?"CNY":"USD");state.recent=[k,...state.recent.filter(x=>x!==k)].slice(0,10);save();$("#quoteResult").innerHTML='<div class="panel"><div class="muted">'+q.symbol+" · "+q.name+" · "+assetLabel(q.assetType||t)+'</div><div class="quote-main">'+(c==="USD"?"$":"¥")+num(q.price)+'</div><div class="'+(q.change>=0?"positive":"negative")+'">'+(q.change>=0?"+":"")+num(q.change)+"（"+(q.changePct>=0?"+":"")+q.changePct.toFixed(2)+"%）"+'</div><div class="asset-row"><span>最高 <b>'+num(q.high)+'</b></span><span>最低 <b>'+num(q.low)+'</b></span><span>币种 <b>'+c+"</b></span></div></div>";render();try{await loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m")}catch(x){$("#klineInfo").textContent="K线加载失败："+x.message;$("#klineChart").innerHTML=""}}catch(x){toast("行情获取失败："+x.message)}};
 $$("[data-range]").forEach(b=>b.onclick=async()=>{const active=$$("#klineRange .chip");active.forEach(x=>x.classList.toggle("active",x===b));const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(!raw)return toast("请先查询标的");try{b.disabled=true;await loadKline(raw,t,b.dataset.range)}catch(x){$("#klineInfo").textContent="K线加载失败："+x.message}finally{b.disabled=false}});$("#tradeForm").onsubmit=async e=>{e.preventDefault();const raw=$("#tradeSymbol").value.trim(),t=assetType($("#tradeType").value),k=sym(raw,t),side=$("#tradeSide").value;let qty=Number($("#tradeQty").value),fr=Math.max(0,Number($("#tradeFee").value)||0);if(!k||qty<=0)return toast("请填写交易信息");const aShare=isAShareStock(raw,t),lot=aShare?aShareLot(raw):1;try{let price=Number($("#tradePrice").value),cur="CNY";if(!price){const q=await quote(k,t);price=q.price;cur=q.currency||((t==="fund")?"CNY":"USD")}const p=state.positions[k]||{symbol:k,qty:0,avg:0,price,currency:cur,assetType:t};if(aShare){if(side==="buy")qty=Math.floor(qty/lot)*lot;else if(qty<p.qty&&qty%lot!==0)qty=Math.floor(qty/lot)*lot;if(qty<=0)return toast("A股买入数量需为"+lot+"股的整数倍");if(side==="sell"&&p.lastBuyDate===localDate())return toast("A股实行T+1，今日买入的持仓不能今日卖出")}const stamp=aShare&&side==="sell"?0.0005:0;const gross=price*qty,fee=gross*fr+gross*stamp,fx=cur==="USD"?Number(state.settings.usdCny||7.2):1,cost=(gross+fee)*fx,proceeds=(gross-fee)*fx;if(side==="buy"){if(cost>state.cash)return toast("现金不足");p.avg=(p.avg*p.qty+gross+fee)/(p.qty+qty);p.qty+=qty;p.lastBuyDate=localDate();state.cash-=cost}else{if(qty>p.qty)return toast("持仓不足");state.cash+=proceeds;p.qty-=qty}p.price=price;p.currency=cur;p.assetType=p.assetType||t;if(p.qty)state.positions[k]=p;else delete state.positions[k];state.trades.push({symbol:k,side,qty,price,total:gross,fee,currency:cur,cashImpact:side==="buy"?-cost:proceeds,time:Date.now(),assetType:t,stampDuty:stamp});save();render();toast(aShare?"模拟交易已执行（A股规则）":"模拟交易已执行")}catch(x){toast("交易失败："+x.message)}};
 function maValues(bars,n){return bars.map((_,i)=>i+1<n?null:bars.slice(i-n+1,i+1).reduce((s,x)=>s+x.close,0)/n)}
+function normalizeKlineBars(bars){
+  return (bars||[]).map(b=>{
+    const close=Number(b.close);
+    const open=Number.isFinite(Number(b.open))&&Number(b.open)>0?Number(b.open):close;
+    const high=Number.isFinite(Number(b.high))&&Number(b.high)>0?Number(b.high):Math.max(open,close);
+    const low=Number.isFinite(Number(b.low))&&Number(b.low)>0?Number(b.low):Math.min(open,close);
+    return {...b,open,high:Math.max(high,open,close),low:Math.min(low,open,close),close};
+  }).filter(b=>b.date&&Number.isFinite(b.close)&&b.close>0&&Number.isFinite(b.open)&&Number.isFinite(b.high)&&Number.isFinite(b.low));
+}
 function klineSVG(bars){
-  const data=bars.slice(-600),W=1100,H=430,pl=48,pr=18,pt=18,pb=42;
+  const data=normalizeKlineBars(bars).slice(-600),W=1100,H=430,pl=48,pr=18,pt=18,pb=42;
   if(!data.length)return "";
   const highs=data.map(x=>x.high),lows=data.map(x=>x.low),hi=Math.max(...highs),lo=Math.min(...lows),span=hi-lo||1;
   const chartH=H-pt-pb,step=(W-pl-pr)/Math.max(1,data.length),body=Math.max(2,Math.min(9,step*.62));
