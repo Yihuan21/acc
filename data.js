@@ -134,15 +134,29 @@ export class DataAPI {
 
     const quote = result.indicators?.quote?.[0] || {};
     const adjusted = result.indicators?.adjclose?.[0]?.adjclose || [];
-    const rows = (result.timestamp || []).map((timestamp, index) => ({
-      date: new Date(timestamp * 1000).toISOString().slice(0, 10),
-      open: Number(quote.open?.[index]),
-      high: Number(quote.high?.[index]),
-      low: Number(quote.low?.[index]),
-      close: Number(adjusted[index] ?? quote.close?.[index]),
-      volume: Number(quote.volume?.[index]) || 0
-    })).filter(row =>
-      /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
+    const rows = (result.timestamp || []).map((timestamp, index) => {
+      const rawOpen = Number(quote.open?.[index]);
+      const rawHigh = Number(quote.high?.[index]);
+      const rawLow = Number(quote.low?.[index]);
+      const rawClose = Number(quote.close?.[index]);
+      const adjClose = Number(adjusted[index]);
+      const factor = Number.isFinite(rawClose) && rawClose > 0 && Number.isFinite(adjClose) && adjClose > 0
+        ? adjClose / rawClose
+        : 1;
+      return {
+        date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+        open: rawOpen,
+        high: rawHigh,
+        low: rawLow,
+        close: rawClose,
+        adjOpen: Number.isFinite(rawOpen) && rawOpen > 0 ? rawOpen * factor : rawOpen,
+        adjHigh: Number.isFinite(rawHigh) && rawHigh > 0 ? rawHigh * factor : rawHigh,
+        adjLow: Number.isFinite(rawLow) && rawLow > 0 ? rawLow * factor : rawLow,
+        adjClose: Number.isFinite(adjClose) && adjClose > 0 ? adjClose : rawClose,
+        volume: Number(quote.volume?.[index]) || 0
+      };
+    }).filter(row =>
+      /^\\d{4}-\\d{2}-\\d{2}$/.test(row.date) &&
       Number.isFinite(row.close) &&
       row.close > 0
     );
