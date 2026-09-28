@@ -30,16 +30,18 @@ export class DataAPI {
   async fundHistory(code, start, end) {
     const from = start || "2000-01-01";
     const to = end || new Date().toISOString().slice(0, 10);
-    const params = {
-      fundCode: code,
-      startDate: from,
-      endDate: to,
-      pageIndex: 1,
-      pageSize: 5000
-    };
     const path = this.base ? "/api/fund" : "https://api.fund.eastmoney.com/f10/lsjz";
-    const json = await this.request(path, this.base ? params : { ...params, callback: "" });
-    const list = json?.Data?.LSJZList || json?.data?.LSJZList || json?.LSJZList || [];
+    const pageSize = 5000;
+    const pages = [];
+    for (let pageIndex = 1; pageIndex <= 10; pageIndex++) {
+      const params = { fundCode: code, startDate: from, endDate: to, pageIndex, pageSize };
+      const json = await this.request(path, this.base ? params : { ...params, callback: "" });
+      const list = json?.Data?.LSJZList || json?.data?.LSJZList || json?.LSJZList || [];
+      if (!Array.isArray(list) || !list.length) break;
+      pages.push(...list);
+      if (list.length < pageSize) break;
+    }
+    const list = pages;
     const rows = list.map(item => {
       const close = Number(item.DWJZ ?? item.close);
       return {
