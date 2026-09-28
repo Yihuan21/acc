@@ -1,9 +1,10 @@
-import {DataAPI} from "./data.js?v=20260928-12";
-import {runBacktest} from "./backtest.js?v=20260928-12";
+import {DataAPI} from "./data.js?v=20260928-13";
+import {runBacktest} from "./backtest.js?v=20260928-13";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
-const BUILTIN_API=String(window.__INVESTMENT_API__||"https://investment-simulator-api.yihuanchen219.workers.dev").trim().replace(/\/$/,"");\nconst defaults={cash:100000,initialCash:100000,positions:{},trades:[],recent:[],csv:{},settings:{apiBase:BUILTIN_API,usdCny:7.2}};
+const BUILTIN_API=String(window.__INVESTMENT_API__||"https://investment-simulator-api.yihuanchen219.workers.dev").trim().replace(/\/$/,"");
+const defaults={cash:100000,initialCash:100000,positions:{},trades:[],recent:[],csv:{},settings:{apiBase:BUILTIN_API,usdCny:7.2}};
 let state;try{state=JSON.parse(localStorage.getItem("invest-sim")||"null")||structuredClone(defaults)}catch{state=structuredClone(defaults)}
 state.settings=state.settings&&typeof state.settings==="object"?state.settings:{};
 state.settings.apiBase=String(state.settings.apiBase||BUILTIN_API).trim().replace(/\/$/,"");
