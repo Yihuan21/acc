@@ -1,7 +1,7 @@
 export class DataAPI{
   constructor(settings={}){this.s=settings;this.base=String(settings.apiBase||"").replace(/\/$/,"")}
   async request(path,params={}){
-    const url=new URL(/^https?:\\/\\//.test(path)?path:(this.base?this.base+path:"https://query1.finance.yahoo.com"+path));
+    const url=new URL(/^https?:\/\//.test(path)?path:(this.base?this.base+path:"https://query1.finance.yahoo.com"+path));
     for(const [k,v] of Object.entries(params))if(v!==undefined&&v!==null&&v!=="")url.searchParams.set(k,v);
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
     try{const r=await fetch(url,{signal:controller.signal});if(!r.ok)throw Error("数据接口 HTTP "+r.status);const j=await r.json();if(j?.chart?.error)throw Error(j.chart.error.description||"行情接口返回错误");return j}catch(e){if(e.name==="AbortError")throw Error("数据接口超时");throw e}finally{clearTimeout(timer)}
@@ -14,7 +14,7 @@ export class DataAPI{
     if(url)for(const [k,v] of Object.entries(params))if(v)url.searchParams.set(k,v);
     const j=await this.request(this.base?path:url.toString(),{});
     const list=j?.Data?.LSJZList||j?.data?.LSJZList||j?.LSJZList||[];
-    const rows=list.map(x=>({date:String(x.FSRQ||x.date||"").slice(0,10),open:Number(x.DWJZ||x.close),high:Number(x.DWJZ||x.close),low:Number(x.DWJZ||x.close),close:Number(x.DWJZ||x.close),volume:0})).filter(x=>/^\\d{4}-\\d{2}-\\d{2}$/.test(x.date)&&Number.isFinite(x.close)&&x.close>0);
+    const rows=list.map(x=>({date:String(x.FSRQ||x.date||"").slice(0,10),open:Number(x.DWJZ||x.close),high:Number(x.DWJZ||x.close),low:Number(x.DWJZ||x.close),close:Number(x.DWJZ||x.close),volume:0})).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&Number.isFinite(x.close)&&x.close>0);
     rows.sort((a,b)=>a.date.localeCompare(b.date));
     if(rows.length<2)throw Error("基金历史净值不足");
     return rows;
@@ -25,7 +25,7 @@ export class DataAPI{
     return{symbol:code,name:"基金 "+code,price:last.close,change:last.close-prev.close,changePct:prev.close?(last.close/prev.close-1)*100:0,high:last.close,low:last.close,currency:"CNY",time:new Date(last.date+"T00:00:00").getTime(),assetType:"fund"};
   }
   async quote(symbol,{assetType="auto"}={}){
-    if(assetType==="fund" && /^\\d{6}$/.test(String(symbol)))return this.fundQuote(String(symbol));
+    if(assetType==="fund" && /^\d{6}$/.test(String(symbol)))return this.fundQuote(String(symbol));
     const path=this.base?"/api/yahoo":"/v8/finance/chart/"+encodeURIComponent(symbol);
     const j=await this.request(path,this.base?{symbol,range:"1d",interval:"1m"}:{range:"1d",interval:"1m"});
     const m=j.chart?.result?.[0];if(!m)throw Error("找不到该标的");
@@ -34,7 +34,7 @@ export class DataAPI{
     const instrument=String(q.instrumentType||"").toUpperCase(); const detected=instrument.includes("MUTUALFUND")||instrument.includes("FUND")?"fund":instrument.includes("ETF")?"etf":instrument.includes("EQUITY")?"stock":"unknown";
     return{symbol:q.symbol||symbol,name:q.longName||q.shortName||symbol,price:p,change:p-prev,changePct:prev?(p/prev-1)*100:0,high:Number(q.regularMarketDayHigh)||p,low:Number(q.regularMarketDayLow)||p,currency:q.currency||"USD",time:(Number(q.regularMarketTime)||Date.now()/1000)*1000,assetType:detected};
   }
-  async history(symbol,start,end,assetType="auto"){\n    if(assetType==="fund" && /^\\d{6}$/.test(String(symbol)))return this.fundHistory(String(symbol),start,end);
+  async history(symbol,start,end,assetType="auto"){\n    if(assetType==="fund" && /^\d{6}$/.test(String(symbol)))return this.fundHistory(String(symbol),start,end);
     const from=Math.floor(new Date(start||"2000-01-01T00:00:00").getTime()/1000);
     const to=Math.floor(new Date(end||new Date()).getTime()/1000)+86400;
     if(!Number.isFinite(from)||!Number.isFinite(to)||from>=to)throw Error("日期范围无效");
