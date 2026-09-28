@@ -5,4 +5,6 @@ const bars=Array.from({length:90},(_,i)=>{const p=100+i;return{date:new Date(Dat
 test("buy and hold produces positive return on rising data",()=>{const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,slippage:0,position:1});assert(r.final>10000);assert(r.cum>0);assert.equal(r.trades,1)});
 test("invalid capital is rejected",()=>{assert.throws(()=>runBacktest(bars,{capital:0}),/初始资金/)});
 test("insufficient data is rejected",()=>{assert.throws(()=>runBacktest([bars[0]],{}),/至少需要/)});
-test("backtest handles fund-like daily NAV data",()=>{const r=runBacktest(bars.map(x=>({...x,close:x.close/100})),{capital:5000,strategy:"buyhold",feeRate:0,slippage:0});assert(r.final>5000);assert.equal(r.trades,1)});\n
+test("backtest handles fund-like daily NAV data",()=>{const r=runBacktest(bars.map(x=>({...x,close:x.close/100})),{capital:5000,strategy:"buyhold",feeRate:0,slippage:0});assert(r.final>5000);assert.equal(r.trades,1)});
+
+test("benchmark starts on executable day",()=>{const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,slippage:0});assert.equal(r.benchmark,10000*(bars.at(-1).close/bars[1].close));});
