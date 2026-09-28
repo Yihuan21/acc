@@ -19,7 +19,7 @@ export function createSimulation({symbol,assetType="auto",capital=100000,bars,st
   if(clean.length<2) throw new Error("历史数据不足，至少需要 2 个交易日");
   const cash=Number(capital);
   const key=String(symbol||"").toUpperCase();
-  const currency=assetType==="fund"||/\.SS$|\.SZ$/.test(key)?"CNY":"USD";
+  const currency=assetType==="fund"||/^\d{6}$/.test(key)||/\.SS$|\.SZ$/.test(key)?"CNY":"USD";
   if(!Number.isFinite(cash)||cash<=0) throw new Error("初始资金必须大于 0");
   return {
     version:1,
