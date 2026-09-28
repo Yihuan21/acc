@@ -1,12 +1,12 @@
-import {DataAPI} from "./data.js?v=20260928-11";
-import {runBacktest} from "./backtest.js?v=20260928-11";
+import {DataAPI} from "./data.js?v=20260928-12";
+import {runBacktest} from "./backtest.js?v=20260928-12";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
-const defaults={cash:100000,initialCash:100000,positions:{},trades:[],recent:[],csv:{},settings:{apiBase:"",usdCny:7.2}};
+const BUILTIN_API=String(window.__INVESTMENT_API__||"https://investment-simulator-api.yihuanchen219.workers.dev").trim().replace(/\/$/,"");\nconst defaults={cash:100000,initialCash:100000,positions:{},trades:[],recent:[],csv:{},settings:{apiBase:BUILTIN_API,usdCny:7.2}};
 let state;try{state=JSON.parse(localStorage.getItem("invest-sim")||"null")||structuredClone(defaults)}catch{state=structuredClone(defaults)}
 state.settings=state.settings&&typeof state.settings==="object"?state.settings:{};
-state.settings.apiBase=String(state.settings.apiBase||"").trim().replace(/\/$/,"");
+state.settings.apiBase=String(state.settings.apiBase||BUILTIN_API).trim().replace(/\/$/,"");
 state.settings.usdCny=Number(state.settings.usdCny)||7.2;
 state.positions=state.positions&&typeof state.positions==="object"?state.positions:{};
 state.trades=Array.isArray(state.trades)?state.trades:[];
@@ -90,8 +90,8 @@ $("#exportBtn").onclick=()=>{const a=document.createElement("a"),u=URL.createObj
 $("#importAccount").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(typeof x.cash!=="number"||!x.positions)throw Error("格式错误");if(!Number.isFinite(Number(x.cash))||!x.positions||typeof x.positions!=="object"||!Array.isArray(x.trades||[]))throw Error("账户结构无效");state.cash=Number(x.cash);state.initialCash=Number(x.initialCash)>0?Number(x.initialCash):state.cash;state.positions=x.positions;state.trades=x.trades;state.recent=Array.isArray(x.recent)?x.recent:[];state.csv=x.csv&&typeof x.csv==="object"?x.csv:{};state.settings={...state.settings,...(x.settings||{})};save();render();toast("账户已安全导入")}catch(x){toast("导入失败："+x.message)}};
 $("#resetBtn").onclick=()=>{if(confirm("确定重置模拟账户？")){state.cash=state.initialCash;state.positions={};state.trades=[];save();render();toast("账户已重置")}};
 $("#refreshBtn").onclick=async()=>{const ps=Object.values(state.positions);if(!ps.length)return toast("暂无持仓");let ok=0,fail=0;for(const p of ps){try{const q=await quote(p.symbol,p.assetType||"auto");p.price=q.price;p.currency=q.currency;p.assetType=q.assetType||p.assetType;ok++}catch{fail++}}save();render();toast(fail?("刷新完成："+ok+" 个成功，"+fail+" 个失败"):("刷新完成："+ok+" 个标的"))};
-$("#settingsForm").onsubmit=e=>{e.preventDefault();state.settings.apiBase=$("#apiBase").value.trim().replace(/\/$/,"");state.settings.usdCny=Math.max(0.1,Number($("#usdCny").value)||7.2);const n=Number($("#initialCash").value);if(n>0&&!state.trades.length){state.initialCash=n;state.cash=n}save();toast("设置已保存")};
-$("#apiBase").value=state.settings.apiBase||"";$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-40);$("#btStart").value=iso(start);$("#btEnd").value=end;render();
+$("#settingsForm").onsubmit=async e=>{e.preventDefault();state.settings.apiBase=$("#apiBase").value.trim().replace(/\/$/,"")||BUILTIN_API;state.settings.usdCny=Math.max(0.1,Number($("#usdCny").value)||7.2);const n=Number($("#initialCash").value);if(n>0&&!state.trades.length){state.initialCash=n;state.cash=n}save();toast("设置已保存");try{const r=await fetch(state.settings.apiBase+"/api/health",{cache:"no-store"});if(!r.ok)throw Error("接口返回 HTTP "+r.status);toast("接口连接正常")}catch(x){toast("设置已保存，但接口检测失败："+x.message)}};
+$("#apiBase").value=state.settings.apiBase||BUILTIN_API;$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-40);$("#btStart").value=iso(start);$("#btEnd").value=end;render();
 document.documentElement.classList.add("app-ready");
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{});
 
