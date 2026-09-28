@@ -39,9 +39,29 @@ export function createSimulation({symbol,assetType="auto",capital=100000,bars,st
 
 export function currentBar(sim){return sim?.bars?.[sim.currentIndex]||null;}
 export function visibleBars(sim){return sim?.bars?.slice(0,(sim.currentIndex??0)+1)||[];}
+
+/**
+ * Once a trade has been executed, the simulation timeline cannot move
+ * before the most recent trade. This keeps the portfolio state causal:
+ * a later trade must never remain in the account while the clock is moved
+ * to an earlier date.
+ */
+export function latestTradeIndex(sim){
+  if(!sim?.bars?.length||!Array.isArray(sim.trades)||!sim.trades.length)return -1;
+  let latest=-1;
+  for(const trade of sim.trades){
+    const date=String(trade?.date||"").slice(0,10);
+    const index=sim.bars.findIndex(b=>b.date===date);
+    if(index>latest)latest=index;
+  }
+  return latest;
+}
 export function stepSimulation(sim,delta=1){
   if(!sim?.bars?.length)return sim;
-  sim.currentIndex=Math.max(0,Math.min(sim.bars.length-1,sim.currentIndex+Math.trunc(delta||0)));
+  const d=Math.trunc(delta||0);
+  const floor=latestTradeIndex(sim);
+  const minIndex=floor>=0?floor:0;
+  sim.currentIndex=Math.max(minIndex,Math.min(sim.bars.length-1,sim.currentIndex+d));
   const bar=currentBar(sim);
   if(bar)sim.position.price=bar.close;
   return sim;
@@ -51,6 +71,8 @@ export function jumpSimulationToDate(sim,date){
   const target=String(date||"");
   let idx=sim.bars.findIndex(b=>b.date>=target);
   if(idx<0)idx=sim.bars.length-1;
+  const floor=latestTradeIndex(sim);
+  if(floor>=0)idx=Math.max(floor,idx);
   sim.currentIndex=idx;
   sim.position.price=sim.bars[idx].close;
   return sim;
