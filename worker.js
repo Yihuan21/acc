@@ -1,4 +1,5 @@
 // Cloudflare Worker：统一代理股票、ETF、基金真实行情与历史数据
+// Deployment marker: 2026-09-29 — credentials-ready redeploy
 const cors = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,HEAD,OPTIONS",
