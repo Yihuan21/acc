@@ -37,3 +37,11 @@ test("risk output contains a drawdown curve and total fees",()=>{
   assert.equal(r.drawdownCurve.length,bars.length);
   assert(r.fees>0);
 });
+
+
+test("backtest uses adjusted OHLC consistently when provided",()=>{
+  const raw=[100,102,104,106,108].map((p,i)=>({date:new Date(Date.UTC(2025,0,i+1)).toISOString().slice(0,10),open:p,high:p+1,low:p-1,close:p,adjOpen:p/2,adjHigh:(p+1)/2,adjLow:(p-1)/2,adjClose:p/2,volume:1000}));
+  const r=runBacktest(raw,{capital:1000,strategy:"buyhold",feeRate:0,slippage:0});
+  assert.equal(r.tradeLog[0].price,51);
+  assert.equal(r.final,1000*(54/51));
+});
