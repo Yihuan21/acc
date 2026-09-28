@@ -7,11 +7,12 @@ export class DataAPI {
   async request(path, params = {}) {
     const isYahooProxy = path === "/api/yahoo";
     const isFundProxy = path === "/api/fund";
-    const directPath = isYahooProxy
+    const directTarget = isYahooProxy
       ? "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(params.symbol || "")
       : isFundProxy
         ? "https://api.fund.eastmoney.com/f10/lsjz"
         : path;
+
     const buildUrl = target => {
       const url = new URL(/^https?:\/\//.test(target)
         ? target
@@ -21,43 +22,51 @@ export class DataAPI {
       }
       return url;
     };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    const fetchJson = async url => {
-      const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) throw new Error("数据接口 HTTP " + response.status);
-      const json = await response.json();
-      if (json?.chart?.error) throw new Error(json.chart.error.description || "行情接口返回错误");
-      return json;
-    };
-    try {
-      const primary = buildUrl(path);
-      try {
-        return await fetchJson(primary);
-      } catch (primaryError) {
-        if (this.base && (isYahooProxy || isFundProxy)) {
-          try {
-            return await fetchJson(buildUrl(directPath));
-          } catch (fallbackError) {
-            throw new Error("数据接口不可用（代理：" + (primaryError?.message || primaryError) + "；直连：" + (fallbackError?.message || fallbackError) + "）");
-          }
-        }
-        if (!this.base && isYahooProxy) {
-          throw new Error("行情接口被浏览器网络策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
-        }
-        if (!this.base && isFundProxy) {
-          throw new Error("基金接口被浏览器跨域策略拦截；请在「设置」填写已部署的 Cloudflare Worker API 地址");
-        }
-        throw primaryError;
-      }
-    } catch (error) {
-      if (error.name === "AbortError") throw new Error("数据接口超时；请检查 Worker API 地址和网络连接");
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
 
+    const fetchJson = async url => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
+        if (!response.ok) throw new Error("数据接口 HTTP " + response.status);
+        const json = await response.json();
+        if (json?.chart?.error) throw new Error(json.chart.error.description || "行情接口返回错误");
+        return json;
+      } catch (error) {
+        if (error?.name === "AbortError") throw new Error("数据接口超时");
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    const attempts = [{name:"代理", url:buildUrl(path).toString()}];
+
+    if (this.base && (isYahooProxy || isFundProxy)) {
+      attempts.push({name:"直连", url:buildUrl(directTarget).toString()});
+    }
+
+    // GitHub Pages 没有服务端能力；Worker 不可用时，用公开转发读取上游真实数据。
+    if (isYahooProxy || isFundProxy) {
+      const target = buildUrl(directTarget).toString();
+      attempts.push({name:"公共转发", url:"https://api.allorigins.win/raw?url=" + encodeURIComponent(target)});
+      attempts.push({name:"备用转发", url:"https://corsproxy.io/?url=" + encodeURIComponent(target)});
+    }
+
+    const errors = [];
+    const seen = new Set();
+    for (const attempt of attempts) {
+      if (seen.has(attempt.url)) continue;
+      seen.add(attempt.url);
+      try {
+        return await fetchJson(attempt.url);
+      } catch (error) {
+        errors.push(attempt.name + "：" + (error?.message || error));
+      }
+    }
+
+    throw new Error("数据接口不可用：" + errors.join("；"));
+  }
   async fundHistory(code, start, end) {
     const from = start || "2000-01-01";
     const to = end || new Date().toISOString().slice(0, 10);
