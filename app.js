@@ -1,4 +1,4 @@
-import {DataAPI} from "./data.js?v=20260928-14";
+import {DataAPI} from "./data.js?v=20260928-15";
 import {runBacktest} from "./backtest.js?v=20260928-14";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
