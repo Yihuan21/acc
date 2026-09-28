@@ -12,3 +12,9 @@ test("lot size prevents fractional execution",()=>{const r=runBacktest(bars,{cap
 test("minimum and asymmetric fees are applied",()=>{const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,buyFeeRate:.001,sellFeeRate:.002,minFee:5,stampDutyRate:.001});assert(r.tradeLog[0].fee>=5);});
 
 test("benchmark return is exposed",()=>{const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,slippage:0});assert.equal(r.benchmarkReturn,(r.benchmark/10000-1)*100);});
+
+test("A-share sized lots and sell stamp duty remain available in the engine",()=>{
+  const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,buyFeeRate:0,sellFeeRate:0,stampDutyRate:.0005,lotSize:100});
+  assert.equal(r.tradeLog[0].qty,100);
+  assert.equal(r.tradeLog[0].side,"buy");
+});
