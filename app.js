@@ -15,6 +15,7 @@ state.trades=Array.isArray(state.trades)?state.trades:[];
 state.recent=Array.isArray(state.recent)?state.recent:[];
 state.csv=state.csv&&typeof state.csv==="object"?state.csv:{};
 state.simulation=state.simulation&&typeof state.simulation==="object"?state.simulation:null;
+if(state.simulation)state.simulation.playing=false;
 state.cash=Number.isFinite(Number(state.cash))?Number(state.cash):100000;
 state.initialCash=Number.isFinite(Number(state.initialCash))?Number(state.initialCash):state.cash;
 const save=()=>localStorage.setItem("invest-sim",JSON.stringify(state));
@@ -59,7 +60,7 @@ function renderSimulation(){
   $("#simRangeInfo").textContent="历史数据："+s.bars[0].date+" → "+s.bars.at(-1).date+" · 当前仅可见至 "+bar.date+" · 共 "+s.bars.length+" 个交易日";
   $("#simTradePrice").value=bar?String(bar.close):"";
   $("#simKline").innerHTML=klineSVG(visibleBars(s));
-  $("#simTrades").innerHTML=s.trades.length?s.trades.slice().reverse().map(t=>'<div class="row"><span><b>'+(t.side==="buy"?"买入":"卖出")+' '+s.symbol+'</b><small>'+t.date+' · '+num(t.qty)+' × '+num(t.price)+' · 费用 '+num(t.fee)+'</small></span><span>'+money(t.gross)+'</span></div>').join(""):'<div class="empty">当前历史时点还没有交易</div>';
+  $("#simTrades").innerHTML=s.trades.length?s.trades.slice().reverse().map(t=>'<div class="row"><span><b>'+(t.side==="buy"?"买入":"卖出")+' '+s.symbol+'</b><small>'+t.date+' · '+num(t.qty)+' × '+num(t.price)+' · 费用 '+num(t.fee)+'</small></span><span>'+money(t.gross,s.currency)+'</span></div>').join(""):'<div class="empty">当前历史时点还没有交易</div>';
   $("#simPrev").disabled=s.currentIndex<=0;$("#simNext").disabled=s.currentIndex>=s.bars.length-1;
   $("#simStep5").disabled=s.currentIndex>=s.bars.length-1;$("#simStep20").disabled=s.currentIndex>=s.bars.length-1;
   $("#simPlay").textContent=s.playing?"暂停":"播放";
