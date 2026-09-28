@@ -6,7 +6,8 @@ import {
   jumpSimulationToDate,
   visibleBars,
   executeSimulationTrade,
-  simulationEquity
+  simulationEquity,
+  latestTradeIndex
 } from "../simulation.js";
 
 const bars=[
@@ -69,3 +70,18 @@ test("date jump never exposes data after target date",()=>{
 });
 
 function currentDate(sim){return sim.bars[sim.currentIndex].date;}
+
+
+test("timeline may move after a trade but never before the latest trade date",()=>{
+  const sim=createSimulation({symbol:"AAPL",capital:1000,bars});
+  executeSimulationTrade(sim,{side:"buy",qty:10,price:10,date:"2020-01-02",feeRate:0});
+  stepSimulation(sim,3);
+  assert.equal(sim.currentIndex,3);
+  stepSimulation(sim,-1);
+  assert.equal(sim.currentIndex,2);
+  assert.equal(latestTradeIndex(sim),0);
+  jumpSimulationToDate(sim,"2020-01-02");
+  assert.equal(sim.currentIndex,0);
+  jumpSimulationToDate(sim,"2020-01-01");
+  assert.equal(sim.currentIndex,0);
+});
