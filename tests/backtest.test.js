@@ -18,3 +18,23 @@ test("A-share sized lots and sell stamp duty remain available in the engine",()=
   assert.equal(r.tradeLog[0].qty,100);
   assert.equal(r.tradeLog[0].side,"buy");
 });
+
+test("sell can liquidate the remaining position even when it is below the buy lot",()=>{
+  const down=Array.from({length:15},(_,i)=>100-i);
+  const bars2=down.concat(Array.from({length:16},(_,i)=>86+i)).map((p,i)=>({
+    date:new Date(Date.UTC(2024,0,i+1)).toISOString().slice(0,10),
+    open:p,high:p+1,low:p-1,close:p,volume:1000
+  }));
+  const r=runBacktest(bars2,{capital:10000,strategy:"rsi",feeRate:0,slippage:0,lotSize:100});
+  assert.equal(r.tradeLog[0].side,"buy");
+  assert.equal(r.tradeLog[0].qty,100);
+  assert.equal(r.tradeLog.at(-1).side,"sell");
+  assert.equal(r.tradeLog.at(-1).qty,100);
+});
+
+test("risk output contains a drawdown curve and total fees",()=>{
+  const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:.001,slippage:0});
+  assert.equal(r.drawdownCurve.length,bars.length);
+  assert(r.drawdownCurve.some(x=>x<0));
+  assert(r.fees>0);
+});
