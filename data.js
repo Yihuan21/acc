@@ -156,7 +156,7 @@ export class DataAPI {
         volume: Number(quote.volume?.[index]) || 0
       };
     }).filter(row =>
-      /^\\d{4}-\\d{2}-\\d{2}$/.test(row.date) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
       Number.isFinite(row.close) &&
       row.close > 0
     );
