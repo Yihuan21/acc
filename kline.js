@@ -15,7 +15,7 @@ export function normalizeKLine(rows = []) {
     .filter(row => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) return false;
       if (![row.open,row.high,row.low,row.close].every(Number.isFinite)) return false;
-      return row.close > 0;
+      return row.open > 0 && row.high >= row.low && row.close > 0;
     })
     .sort((a,b)=>a.date.localeCompare(b.date))
     .filter(row=>{
@@ -47,4 +47,14 @@ export function addIndicators(rows=[]) {
     result=result.map((row,i)=>({...row,[`ma${period}`]:values[i].ma}));
   }
   return result;
+}
+
+// 为图表和回测提供统一涨跌幅，不依赖外部数据格式
+export function enrichDailyKLine(rows=[]) {
+  const data=addIndicators(rows);
+  return data.map((row,index)=>({
+    ...row,
+    change:index===0?0:((row.close-data[index-1].close)/data[index-1].close)*100,
+    range:((row.high-row.low)/row.open)*100
+  }));
 }
