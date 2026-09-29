@@ -25,6 +25,7 @@ export function normalizeKLine(rows = []) {
     });
 }
 
+// 历史模拟专用：禁止查看模拟日期之后的数据
 export function visibleKLine(rows, simulationDate) {
   const limit = String(simulationDate || '').slice(0,10);
   if (!limit) return normalizeKLine(rows);
@@ -49,12 +50,38 @@ export function addIndicators(rows=[]) {
   return result;
 }
 
-// 为图表和回测提供统一涨跌幅，不依赖外部数据格式
 export function enrichDailyKLine(rows=[]) {
   const data=addIndicators(rows);
   return data.map((row,index)=>({
     ...row,
     change:index===0?0:((row.close-data[index-1].close)/data[index-1].close)*100,
-    range:((row.high-row.low)/row.open)*100
+    range:((row.high-row.low)/row.open)*100,
+    bullish: row.close >= row.open
+  }));
+}
+
+// K线详情浮窗数据
+export function klinePoint(row){
+  if(!row)return null;
+  return {
+    date:row.date,
+    open:row.open,
+    high:row.high,
+    low:row.low,
+    close:row.close,
+    volume:row.volume,
+    change:row.change,
+    ma5:row.ma5,
+    ma10:row.ma10,
+    ma20:row.ma20,
+    ma60:row.ma60
+  };
+}
+
+// 简单交易信号辅助（不用于预测，只基于已发生数据）
+export function movingAverageSignal(rows=[]){
+  return enrichDailyKLine(rows).map(row=>({
+    date:row.date,
+    signal: row.ma5 && row.ma20 && row.ma5>row.ma20 ? 'above' : 'below'
   }));
 }
