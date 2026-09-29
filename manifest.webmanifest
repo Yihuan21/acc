@@ -1,1 +1,11 @@
-{"name":"投资模拟器","short_name":"投资模拟","start_url":"./","display":"standalone","background_color":"#080d18","theme_color":"#0b1020","icons":[],"orientation":"any","categories":["finance","productivity"]}
+{
+  "name": "投资模拟器",
+  "short_name": "投资模拟",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#080d18",
+  "theme_color": "#0b1020",
+  "orientation": "any",
+  "categories": ["finance", "productivity"],
+  "icons": []
+}
