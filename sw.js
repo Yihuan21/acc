@@ -1,12 +1,53 @@
-const C="investment-lab-v21",A=["./","./index.html","./styles.css","./app.js?v=20260929-01","./data.js?v=20260928-17","./backtest.js?v=20260928-15","./simulation.js?v=20260929-01","./manifest.webmanifest"];
-self.addEventListener("install",e=>e.waitUntil(caches.open(C).then(c=>c.addAll(A)).then(()=>self.skipWaiting())));
-self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-self.addEventListener("fetch",e=>{
-  if(e.request.method!=="GET")return;
-  const u=new URL(e.request.url);
-  if(u.pathname.endsWith("/sw.js")||u.pathname.includes("/api/")||u.hostname.includes("yahoo.com"))return;
-  e.respondWith(fetch(e.request,{cache:"no-store"}).then(r=>{
-    if(r.ok){const copy=r.clone();caches.open(C).then(c=>c.put(e.request,copy))}
-    return r;
-  }).catch(()=>caches.match(e.request).then(hit=>hit||caches.match("./index.html"))));
+const CACHE_VERSION = "investment-lab-v22";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./data.js",
+  "./backtest.js",
+  "./simulation.js",
+  "./manifest.webmanifest"
+];
+
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE_VERSION)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(key => key !== CACHE_VERSION)
+          .map(key => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+
+  const url = new URL(event.request.url);
+  if (
+    url.pathname.endsWith("/sw.js") ||
+    url.pathname.includes("/api/") ||
+    url.hostname.includes("yahoo.com")
+  ) return;
+
+  event.respondWith(
+    fetch(event.request, { cache: "no-store" })
+      .then(response => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(hit => hit || caches.match("./index.html")))
+  );
 });
