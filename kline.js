@@ -71,9 +71,7 @@ export function movingAverageSignal(rows=[]){
 }
 
 export function buildDailyKlineWindow(rows=[], options={}) {
-  const data = options.simulationDate
-    ? visibleKLine(rows, options.simulationDate)
-    : normalizeKLine(rows);
+  const data = options.simulationDate ? visibleKLine(rows, options.simulationDate) : normalizeKLine(rows);
   const enriched = enrichDailyKLine(data);
   const limit = Math.max(1, Number(options.limit) || enriched.length);
   return enriched.slice(-limit);
@@ -83,4 +81,29 @@ export function klineRange(rows=[]) {
   const data = Array.isArray(rows) ? rows.filter(Boolean) : [];
   if(!data.length) return {high:null, low:null};
   return {high:Math.max(...data.map(x=>Number(x.high)).filter(Number.isFinite)), low:Math.min(...data.map(x=>Number(x.low)).filter(Number.isFinite))};
+}
+
+// 给图表和回测统一入口：任何调用都必须先经过时间过滤。
+export function simulationDailyKLine(rows=[], simulationDate, limit=240){
+  return buildDailyKlineWindow(rows,{simulationDate,limit});
+}
+
+// 检查是否存在未来数据泄露。
+export function hasFutureKLine(rows=[], simulationDate){
+  const limit=String(simulationDate||'').slice(0,10);
+  if(!limit) return false;
+  return normalizeKLine(rows).some(row=>row.date>limit);
+}
+
+export function klineSummary(row){
+  if(!row)return null;
+  return {
+    date:row.date,
+    open:row.open,
+    high:row.high,
+    low:row.low,
+    close:row.close,
+    volume:row.volume,
+    change:row.change
+  };
 }
