@@ -10,12 +10,14 @@ export function normalizeKLine(rows = []) {
       high: Number(row?.high),
       low: Number(row?.low),
       close: Number(row?.close),
-      volume: Number(row?.volume || 0)
+      volume: Math.max(0, Number(row?.volume || 0))
     }))
     .filter(row => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) return false;
-      if (![row.open,row.high,row.low,row.close].every(Number.isFinite)) return false;
-      return row.open > 0 && row.high >= row.low && row.close > 0;
+      if (![row.open,row.high,row.low,row.close,row.volume].every(Number.isFinite)) return false;
+      if (row.open <= 0 || row.high < row.low || row.close <= 0) return false;
+      if (row.high < Math.max(row.open,row.close) || row.low > Math.min(row.open,row.close)) return false;
+      return true;
     })
     .sort((a,b)=>a.date.localeCompare(b.date))
     .filter(row=>{
@@ -68,8 +70,6 @@ export function movingAverageSignal(rows=[]){
   return enrichDailyKLine(rows).map(row=>({date:row.date,signal: row.ma5 && row.ma20 && row.ma5>row.ma20 ? 'above' : 'below'}));
 }
 
-// 供K线组件使用：生成完整图表窗口数据
-// 保证传入模拟日期时不会包含未来交易日
 export function buildDailyKlineWindow(rows=[], options={}) {
   const data = options.simulationDate
     ? visibleKLine(rows, options.simulationDate)
@@ -79,9 +79,8 @@ export function buildDailyKlineWindow(rows=[], options={}) {
   return enriched.slice(-limit);
 }
 
-// 计算区间最高最低，供自适应缩放使用
 export function klineRange(rows=[]) {
-  const data = normalizeKLine(rows);
+  const data = Array.isArray(rows) ? rows.filter(Boolean) : [];
   if(!data.length) return {high:null, low:null};
-  return {high:Math.max(...data.map(x=>x.high)), low:Math.min(...data.map(x=>x.low))};
+  return {high:Math.max(...data.map(x=>Number(x.high)).filter(Number.isFinite)), low:Math.min(...data.map(x=>Number(x.low)).filter(Number.isFinite))};
 }
