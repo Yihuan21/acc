@@ -33,7 +33,7 @@ export function createSimulation({symbol,assetType="auto",capital=100000,bars,st
     currency,
     initialCash:cash,
     cash,
-    position:{qty:0,avg:0,price:clean[Math.max(0,Math.min(startIndex,clean.length-1))].close,lastBuyDate:""},
+    position:{qty:0,avg:0,price:clean[Math.max(0,Math.min(startIndex,clean.length-1))].close,lastBuyDate:"",lots:[]},
     trades:[],
     bars:clean,
     currentIndex:Math.max(0,Math.min(startIndex,clean.length-1)),
@@ -125,7 +125,7 @@ export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,s
     if(sim.position.qty<=0){
       sim.position.qty=0;
       sim.position.avg=0;
-      sim.position.lastBuyDate="";
+      sim.position.lastBuyDate="";\n      sim.position.lots=[];
     }
   }
   sim.position.price=executionPrice;
