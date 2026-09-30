@@ -27,9 +27,20 @@ export class DataAPI {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15000);
       try {
-        const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
-        if (!response.ok) throw new Error("数据接口 HTTP " + response.status);
-        const json = await response.json();
+        const response = await fetch(url, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: { "Accept": "application/json,text/plain,*/*" }
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          let detail = "";
+          try { detail = JSON.parse(text)?.error || JSON.parse(text)?.message || ""; } catch {}
+          throw new Error("数据接口 HTTP " + response.status + (detail ? "：" + detail : ""));
+        }
+        let json;
+        try { json = JSON.parse(text); }
+        catch { throw new Error("数据接口返回了无效 JSON"); }
         if (json?.chart?.error) throw new Error(json.chart.error.description || "行情接口返回错误");
         return json;
       } catch (error) {
@@ -40,10 +51,12 @@ export class DataAPI {
       }
     };
 
-    const attempts = [{name:"代理", url:buildUrl(path).toString()}];
+    const attempts = [];
+    if (this.base) attempts.push({name:"Cloudflare Worker", url:buildUrl(path).toString()});
+    else attempts.push({name:"直接接口", url:buildUrl(path).toString()});
 
     if (this.base && (isYahooProxy || isFundProxy)) {
-      attempts.push({name:"直连", url:buildUrl(directTarget).toString()});
+      attempts.push({name:"上游直连", url:buildUrl(directTarget).toString()});
     }
 
     // GitHub Pages 没有服务端能力；Worker 不可用时，用公开转发读取上游真实数据。
@@ -67,6 +80,17 @@ export class DataAPI {
 
     throw new Error("数据接口不可用：" + errors.join("；"));
   }
+  async health() {
+    if (!this.base) return { ok: true, mode: "direct" };
+    const response = await fetch(this.base + "/api/health", {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || json?.ok !== true) throw new Error("代理健康检查失败");
+    return json;
+  }
+
   async fundHistory(code, start, end) {
     const from = start || "2000-01-01";
     const to = end || new Date().toISOString().slice(0, 10);
