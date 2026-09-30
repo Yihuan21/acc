@@ -1,6 +1,7 @@
 import {DataAPI} from "./data.js?v=20260930-09";
-import {runBacktest} from "./backtest.js?v=20260930-11";
-import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-11";
+import {runBacktest} from "./backtest.js?v=20260930-12";
+import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-01";
+import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-12";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);const esc=v=>String(v??"").replace(/[&<>"\']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[m]));
@@ -101,22 +102,21 @@ function klinePointHTML(b,prev,type="daily"){
   const time=type==="intraday"?(b.date+" "+b.time):b.date;
   return '<div class="kline-point-title">'+escapeHTML(time)+'</div><div class="kline-point-grid"><span>开 <b>'+num(b.open)+'</b></span><span>高 <b>'+num(b.high)+'</b></span><span>低 <b>'+num(b.low)+'</b></span><span>收 <b>'+num(b.close)+'</b></span><span>涨跌 <b class="'+(change>=0?"positive":"negative")+'">'+(change>=0?"+":"")+change.toFixed(2)+'%</b></span><span>成交量 <b>'+num(b.volume||0)+'</b></span></div>';
 }
-function klineSVG(bars,{type="daily"}={}){
-  const data=normalizeKlineBars(bars).slice(-600),W=1100,H=430,pl=58,pr=18,pt=18,pb=42;
+let klineRequestId=0;
+function klineSVG(bars,{type="daily",showVolume=true,showMA=true}={}){
+  const data=normalizeKlineBars(bars).slice(-600),W=1100,H=500,pl=58,pr=18,pt=18,pb=42,volumeH=70,gap=12;
   if(!data.length)return "";
   const highs=data.map(x=>x.high),lows=data.map(x=>x.low),hi=Math.max(...highs),lo=Math.min(...lows),span=hi-lo||1;
-  const chartH=H-pt-pb,step=(W-pl-pr)/Math.max(1,data.length),body=Math.max(2,Math.min(10,step*.62));
-  const y=v=>pt+(hi-v)/span*chartH, x=i=>pl+(i+.5)*step;
+  const chartH=H-pt-pb-volumeH-gap,step=(W-pl-pr)/Math.max(1,data.length),body=Math.max(2,Math.min(10,step*.62));
+  const y=v=>pt+(hi-v)/span*chartH,x=i=>pl+(i+.5)*step;
   const grid=[0,.25,.5,.75,1].map(t=>{const yy=pt+t*chartH,val=hi-t*span;return '<line class="kline-grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+yy+'" y2="'+yy+'"/><text class="kline-axis" x="4" y="'+(yy+4)+'">'+num(val)+'</text>'}).join("");
-  const candles=data.map((b,i)=>{
-    const xx=x(i),yyO=y(b.open),yyC=y(b.close),yyH=y(b.high),yyL=y(b.low),up=b.close>=b.open,cls=up?"kline-up":"kline-down";
-    const top=Math.min(yyO,yyC),height=Math.max(1,Math.abs(yyC-yyO));
-    return '<line class="'+cls+'" x1="'+xx+'" x2="'+xx+'" y1="'+yyH+'" y2="'+yyL+'"/><rect class="'+cls+'" x="'+(xx-body/2)+'" y="'+top+'" width="'+body+'" height="'+height+'"/>';
-  }).join("");
-  const maPath=type==="daily"?((n,cls)=>{const vals=maValues(data,n),pts=vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);return pts.length>1?'<polyline class="'+cls+'" points="'+pts.map(p=>p.join(",")).join(" ")+'"/>':""}):(()=> "");  
+  const candles=data.map((b,i)=>{const xx=x(i),yyO=y(b.open),yyC=y(b.close),yyH=y(b.high),yyL=y(b.low),up=b.close>=b.open,cls=up?"kline-up":"kline-down",top=Math.min(yyO,yyC),height=Math.max(1,Math.abs(yyC-yyO));return '<line class="'+cls+'" x1="'+xx+'" x2="'+xx+'" y1="'+yyH+'" y2="'+yyL+'"/><rect class="'+cls+'" x="'+(xx-body/2)+'" y="'+top+'" width="'+body+'" height="'+height+'"/>'}).join("");
+  const maPath=(n,cls)=>{const vals=maValues(data,n),pts=vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);return pts.length>1?'<polyline class="'+cls+'" points="'+pts.map(p=>p.join(",")).join(" ")+'"/>':""};
+  const volumes=showVolume?data.map((b,i)=>{const xx=x(i),maxV=Math.max(...data.map(z=>Number(z.volume)||0),1),vh=(Number(b.volume)||0)/maxV*volumeH;return '<rect class="kline-volume '+(b.close>=b.open?"kline-up":"kline-down")+'" x="'+(xx-body/2)+'" y="'+(pt+chartH+gap+volumeH-vh)+'" width="'+body+'" height="'+Math.max(1,vh)+'"/>'}).join(""):"";
+  const volumeLine=showVolume?'<line class="kline-grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+(pt+chartH+gap)+'" y2="'+(pt+chartH+gap)+'"/>':"";
   const labels=[0,Math.floor(data.length/3),Math.floor(data.length*2/3),data.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>'<text class="kline-axis" text-anchor="middle" x="'+x(i)+'" y="'+(H-12)+'">'+escapeHTML(type==="intraday"?data[i].time:data[i].date)+'</text>').join("");
-  const hitAreas=data.map((b,i)=>'<rect class="kline-hit" data-kline-index="'+i+'" x="'+(x(i)-Math.max(step/2,8))+'" y="'+pt+'" width="'+Math.max(step,16)+'" height="'+chartH+'" fill="transparent"/>').join("");
-  return '<div class="kline-interactive" data-kline-type="'+type+'"><div class="kline-scroll"><svg class="kline-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+(type==="intraday"?"分时K线":"日K线")+'">'+grid+candles+(type==="daily"?maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60"):"")+labels+hitAreas+'</svg></div><div class="kline-tooltip" hidden></div><div class="kline-legend"><span>'+ (type==="intraday"?"5分钟K · 当日":"日K · 每个交易日") +'</span>'+(type==="daily"?'<span>MA5</span><span>MA20</span><span>MA60</span>':"")+'<span>移动/点按图表查看精确坐标</span></div></div>';
+  const hitAreas=data.map((b,i)=>'<rect class="kline-hit" data-kline-index="'+i+'" x="'+(x(i)-Math.max(step/2,8))+'" y="'+pt+'" width="'+Math.max(step,16)+'" height="'+(chartH+gap+volumeH)+'" fill="transparent"/>').join("");
+  return '<div class="kline-interactive" data-kline-type="'+type+'"><div class="kline-scroll"><svg class="kline-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+(type==="intraday"?"分时K线":"日K线")+'">'+grid+candles+(type==="daily"&&showMA?maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60"):"")+volumeLine+volumes+labels+hitAreas+'</svg></div><div class="kline-tooltip" hidden></div><div class="kline-legend"><span>'+ (type==="intraday"?"5分钟K · 当日":"日K · 每个交易日") +'</span>'+(type==="daily"&&showMA?'<span>MA5</span><span>MA20</span><span>MA60</span>':"")+(showVolume?'<span>成交量</span>':"")+'<span>移动/点按图表查看精确坐标</span></div></div>';
 }
 function bindKlineInteraction(root,bars,type="daily"){
   if(!root)return;
@@ -143,24 +143,18 @@ function bindKlineInteraction(root,bars,type="daily"){
   show(data.length-1);
 }
 async function loadKline(raw,t,range){
-  const k=sym(raw,t),endDate=new Date(),startDate=new Date(endDate);
-  if(range==="3m")startDate.setMonth(startDate.getMonth()-3);
-  else if(range==="1y")startDate.setFullYear(startDate.getFullYear()-1);
-  else if(range==="5y")startDate.setFullYear(startDate.getFullYear()-5);
-  else startDate.setFullYear(startDate.getFullYear()-40);
-  const bars=await history(k,iso(startDate),iso(endDate),t);
-  if(bars.length<2)throw Error("K线历史数据不足");
-  $("#klineInfo").textContent="日K · "+bars.length+" 个交易日 · "+bars[0].date+" → "+bars.at(-1).date;
-  $("#klineChart").innerHTML=klineSVG(bars,{type:"daily"});
-  bindKlineInteraction($("#klineChart .kline-interactive"),bars,"daily");
+  const request=++klineRequestId,k=sym(raw,t),endDate=new Date(),startDate=new Date(endDate);
+  if(range==="3m")startDate.setMonth(startDate.getMonth()-3);else if(range==="1y")startDate.setFullYear(startDate.getFullYear()-1);else if(range==="5y")startDate.setFullYear(startDate.getFullYear()-5);else startDate.setFullYear(startDate.getFullYear()-40);
+  $("#klineStatus").textContent="正在加载";
+  const bars=await history(k,iso(startDate),iso(endDate),t);if(request!==klineRequestId)return;if(bars.length<2)throw Error("K线历史数据不足");
+  $("#klineStatus").textContent="已更新";$("#klineInfo").textContent="日K · "+bars.length+" 个交易日 · "+bars[0].date+" → "+bars.at(-1).date;
+  $("#klineChart").innerHTML=klineSVG(bars,{type:"daily",showVolume:$("#showVolume")?.checked!==false,showMA:$("#showMA")?.checked!==false});bindKlineInteraction($("#klineChart .kline-interactive"),bars,"daily");
 }
 async function loadIntraday(raw,t){
-  const k=sym(raw,t);
-  if(t==="fund")throw Error("基金没有连续交易时段分时数据");
-  const bars=await api().intraday(k,{range:"1d",interval:"5m",assetType:t});
-  $("#klineInfo").textContent="分时K · 5分钟 · "+bars.length+" 个数据点 · "+bars[0].date+" "+bars[0].time+" → "+bars.at(-1).date+" "+bars.at(-1).time;
-  $("#klineChart").innerHTML=klineSVG(bars,{type:"intraday"});
-  bindKlineInteraction($("#klineChart .kline-interactive"),bars,"intraday");
+  const request=++klineRequestId,k=sym(raw,t);if(t==="fund")throw Error("基金没有连续交易时段分时数据");$("#klineStatus").textContent="正在加载";
+  const bars=await api().intraday(k,{range:"1d",interval:"5m",assetType:t});if(request!==klineRequestId)return;if(!bars.length)throw Error("暂无分时数据");
+  $("#klineStatus").textContent="已更新";$("#klineInfo").textContent="分时K · 5分钟 · "+bars.length+" 个数据点 · "+bars[0].date+" "+bars[0].time+" → "+bars.at(-1).date+" "+bars.at(-1).time;
+  $("#klineChart").innerHTML=klineSVG(bars,{type:"intraday",showVolume:$("#showVolume")?.checked!==false,showMA:false});bindKlineInteraction($("#klineChart .kline-interactive"),bars,"intraday");
 }
 function chart(a){if(!a.length)return"";const w=900,h=240,p=18,lo=Math.min(...a),hi=Math.max(...a),s=hi-lo||1,pts=a.map((v,i)=>p+i*(w-2*p)/Math.max(1,a.length-1)+","+((h-p)-(v-lo)/s*(h-2*p))).join(" ");return'<svg class="chart" viewBox="0 0 '+w+" "+h+'" preserveAspectRatio="none"><polyline points="'+pts+'" fill="none" stroke="currentColor" stroke-width="3"/></svg>'}
 async function loadHistoricalSimulation(){
@@ -211,6 +205,22 @@ $("#simTradeForm").onsubmit=e=>{
   try{const record=executeSimulationTrade(s,{side,qty,price,date:bar?.date,feeRate:Number($("#simFee").value)||0,stampDutyRate:0.0005});save();render();toast((record.side==="buy"?"买入":"卖出")+"已按 "+record.date+" 历史时点执行")}
   catch(e){toast("历史交易失败："+e.message)}
 };
+async function runAutomatedInvestment(){
+  const raw=$("#simSymbol").value.trim(),t=assetType($("#simType").value),a=$("#simStart").value,b=$("#simEnd").value,cap=Number($("#simCapital").value),st=$("#autoStrategy").value,pos=Math.min(1,Math.max(.05,Number($("#autoPosition").value)||1));
+  if(!raw||!a||!b||cap<=0)return toast("请先填写历史模拟参数");
+  const btn=$("#autoRunBtn");setButtonBusy(btn,true,"正在自动计算…");
+  try{
+    const k=sym(raw,t),bars=await history(k,a,b,t);if(bars.length<65)throw Error("该区间至少需要约 65 个交易日才能运行多数策略");
+    const plan=generateStrategyPlan(bars,{strategy:st,initialCash:cap,position:pos});
+    const aShare=isAShareStock(raw,t),r=runBacktest(bars,{capital:cap,strategy:st,assetType:t,position:pos,feeRate:.0005,slippage:.0005,stampDutyRate:aShare?.0005:0,lotSize:aShare?aShareLot(raw):1});
+    const currency=aShare||t==="fund"?"CNY":"USD";$("#autoResult").classList.remove("empty");
+    $("#autoResult").innerHTML='<div class="automation-summary"><div><small>策略</small><b>'+esc(strategyLabel(st))+'</b></div><div><small>期末资产</small><b>'+money(r.final,currency)+'</b></div><div><small>累计收益</small><b class="'+(r.cum>=0?"positive":"negative")+'">'+r.cum.toFixed(2)+'%</b></div><div><small>最大回撤</small><b class="negative">-'+r.maxDrawdown.toFixed(2)+'%</b></div><div><small>自动交易</small><b>'+r.trades+' 次</b></div></div><div class="strategy-plan">'+plan.slice(0,12).map(x=>'<div class="row"><span><b>'+x.date+'</b><small>'+esc(x.reason)+'</small></span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"自动买入":"自动卖出")+'</b></div>').join("")+'</div><p class="muted">信号只使用前一交易日数据，并在下一交易日开盘执行。</p>';
+    toast("自动投资策略运行完成");
+  }catch(e){$("#autoResult").textContent="自动策略运行失败："+friendlyError(e);toast("自动策略运行失败："+friendlyError(e))}finally{setButtonBusy(btn,false)}
+}
+$("#autoRunBtn").onclick=runAutomatedInvestment;
+$("#showVolume")?.addEventListener("change",()=>{const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(raw)loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m").catch(e=>toast(friendlyError(e)))});
+$("#showMA")?.addEventListener("change",()=>{const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(raw)loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m").catch(e=>toast(friendlyError(e)))});
 $("#backtestForm").onsubmit=async e=>{e.preventDefault();const t=assetType($("#btType").value),k=sym($("#btSymbol").value,t),cap=Number($("#btCapital").value),a=$("#btStart").value,b=$("#btEnd").value,st=$("#btStrategy").value;if(!k||cap<=0||!a||!b)return toast("参数不完整");try{toast("正在下载历史数据…");const bars=await history(k,a,b,t);if(bars.length<2)throw Error("历史数据不足");const aShare=isAShareStock($("#btSymbol").value,t),autoLot=aShare?aShareLot($("#btSymbol").value):1,lotInput=Number($("#btLot").value)||1,stampInput=Number($("#btStamp").value)||0;const r=runBacktest(bars,{capital:cap,strategy:st,assetType:t,feeRate:Number($("#btFee").value)||0,slippage:Number($("#btSlippage").value)||0,position:Math.min(1,Number($("#btPosition").value)||1),riskFreeRate:Math.max(0,Number($("#btRiskFree").value)||0),buyFeeRate:Number($("#btBuyFee").value)||0,sellFeeRate:Number($("#btSellFee").value)||0,minFee:Number($("#btMinFee").value)||0,stampDutyRate:aShare&&stampInput===0?0.0005:stampInput,lotSize:aShare&&lotInput===1?autoLot:lotInput});const resultCurrency=aShare||t==="fund"?"CNY":"USD";$("#backtestResult").innerHTML='<div class="panel"><div class="metric-grid"><div class="metric"><small>期末资产</small><b>'+money(r.final,resultCurrency)+'</b></div><div class="metric"><small>累计收益</small><b class="'+(r.cum>=0?"positive":"negative")+'">'+r.cum.toFixed(2)+'%</b></div><div class="metric"><small>年化收益</small><b>'+r.cagr.toFixed(2)+'%</b></div><div class="metric"><small>最大回撤</small><b class="negative">-'+r.maxDrawdown.toFixed(2)+'%</b></div><div class="metric"><small>Sharpe</small><b>'+r.sharpe.toFixed(2)+'</b></div><div class="metric"><small>Sortino</small><b>'+r.sortino.toFixed(2)+'</b></div><div class="metric"><small>年化波动</small><b>'+r.volatility.toFixed(2)+'%</b></div><div class="metric"><small>交易次数</small><b>'+r.trades+'</b></div><div class="metric"><small>总费用</small><b>'+money(r.fees,resultCurrency)+'</b></div><div class="metric"><small>回撤持续</small><b>'+r.maxDrawdownDays+' 日</b></div><div class="metric"><small>数据点</small><b>'+bars.length+'</b></div><div class="metric"><small>基准收益</small><b>'+r.benchmarkReturn.toFixed(2)+'%</b></div><div class="metric"><small>相对基准</small><b>'+r.alpha.toFixed(2)+'%</b></div></div><div class="chart-wrap">'+chart(r.curve)+'</div><div class="chart-wrap"><div class="muted">回撤曲线</div>'+chart(r.drawdownCurve)+'</div><p>区间：'+bars[0].date+' → '+bars.at(-1).date+'。信号使用前一交易日收盘价，下一交易日开盘成交，避免未来函数；期末按收盘价估值。仍暂未模拟涨跌停、停牌、成交量约束、分红现金流及完整公司行为。</p></div>';toast("回测完成")}catch(x){toast("回测失败："+x.message)}};
 function parseCSV(t){const rows=[];let row=[],cell="",q=false,s=t.replace(/^\uFEFF/,"");for(let i=0;i<s.length;i++){const ch=s[i];if(ch==="\""&&q&&s[i+1]==="\""){cell+="\"";i++;continue}if(ch==="\""){q=!q;continue}if(ch===","&&!q){row.push(cell);cell="";continue}if((ch==="\n"||ch==="\r")&&!q){if(ch==="\r"&&s[i+1]==="\n")i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell="";continue}cell+=ch}if(cell||row.length){row.push(cell);rows.push(row)}if(q)throw Error("CSV 引号未闭合");if(!rows.length)throw Error("CSV 为空");const h=rows[0].map(x=>x.trim().toLowerCase()),di=h.indexOf("date"),ci=h.indexOf("close");if(di<0||ci<0)throw Error("必须有 date、close 列");const ix=k=>h.indexOf(k),seen=new Set(),o=[];for(const a of rows.slice(1)){const d=String(a[di]||"").slice(0,10),c=Number(a[ci]);if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(d)||!Number.isFinite(c)||c<=0||seen.has(d))continue;seen.add(d);o.push({date:d,open:Number(a[ix("open")])||c,high:Number(a[ix("high")])||c,low:Number(a[ix("low")])||c,close:c,volume:Number(a[ix("volume")])||0})}return o.sort((a,b)=>a.date.localeCompare(b.date))}
 $("#csvFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;const k=prompt("请输入这份数据的代码，例如 AAPL 或 600519：");if(!k)return;try{const rows=parseCSV(await f.text());if(rows.length<2)throw Error("有效数据不足");state.csv[sym(k,$("#csvType").value)]=rows;save();render();toast("CSV 导入完成")}catch(x){toast("CSV 导入失败："+x.message)}};
