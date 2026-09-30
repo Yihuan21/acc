@@ -112,6 +112,7 @@ export default {
         ok: true,
         service: "investment-simulator-api",
         worker: "investment-simulator-api",
+        version: "2026-09-30",
         time: new Date().toISOString(),
         endpoints: ["/api/health", "/api/yahoo", "/api/fund"]
       });
