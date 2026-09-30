@@ -80,9 +80,9 @@ export class DataAPI {
 
     throw new Error("数据接口不可用：" + errors.join("；"));
   }
-  async health() {
+  async health({deep = false} = {}) {
     if (!this.base) return { ok: true, mode: "direct" };
-    const response = await fetch(this.base + "/api/health", {
+    const response = await fetch(this.base + "/api/health" + (deep ? "?deep=1" : ""), {
       cache: "no-store",
       headers: { "Accept": "application/json" }
     });
