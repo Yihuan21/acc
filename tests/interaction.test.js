@@ -16,8 +16,6 @@ test("all interactive control ids have handlers",()=>{
 });
 
 test("navigation and chart controls are wired",()=>{
-  assert.ok(app.includes('$ $'));
-  assert.ok(app.includes('$ $')===false);
   assert.ok(app.includes('$$("[data-go]")'));
   assert.ok(app.includes('$$("[data-range]")'));
   assert.ok(app.includes('$$("[data-kline-mode]")'));
