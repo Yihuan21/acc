@@ -78,3 +78,12 @@ button{transition:transform .12s ease,opacity .12s ease,filter .12s ease,box-sha
 .strategy-plan{display:grid;gap:7px;max-height:360px;overflow:auto}
 .strategy-plan .row{background:#0d1528}
 @media(max-width:767px){.automation-summary{grid-template-columns:repeat(2,1fr)}.kline-status{margin-left:0}.kline-indicators{width:100%}}
+
+
+.automation-kline{margin-top:14px}
+.automation-kline .panel-title{margin-bottom:10px}
+#autoKline{min-height:280px}
+.strategy-signals{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.strategy-signal{display:inline-flex;padding:6px 9px;border-radius:999px;background:var(--panel-2,#f3f5f8);font-size:12px}
+.strategy-signal.buy{border:1px solid rgba(40,150,90,.3)}
+.strategy-signal.sell{border:1px solid rgba(200,70,70,.3)}
