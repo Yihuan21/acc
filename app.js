@@ -175,8 +175,8 @@ $("#importAccount").onchange=async e=>{try{const x=JSON.parse(await e.target.fil
 $("#resetBtn").onclick=()=>{if(confirm("确定重置模拟账户？")){state.cash=state.initialCash;state.positions={};state.trades=[];stopSimulationPlayback();state.simulation=null;save();render();toast("账户已重置")}};
 $("#refreshBtn").onclick=async()=>{const ps=Object.values(state.positions);if(!ps.length)return toast("暂无持仓");let ok=0,fail=0;for(const p of ps){try{const q=await quote(p.symbol,p.assetType||"auto");p.price=q.price;p.currency=q.currency;p.assetType=q.assetType||p.assetType;ok++}catch{fail++}}save();render();toast(fail?("刷新完成："+ok+" 个成功，"+fail+" 个失败"):("刷新完成："+ok+" 个标的"))};
 $("#settingsForm").onsubmit=async e=>{e.preventDefault();state.settings.apiBase=$("#apiBase").value.trim().replace(/\/$/,"")||BUILTIN_API;state.settings.usdCny=Math.max(0.1,Number($("#usdCny").value)||7.2);const n=Number($("#initialCash").value);if(n>0&&!state.trades.length){state.initialCash=n;state.cash=n}save();toast("设置已保存");try{
-    const health=await api().health();
-    toast("设置已保存，数据接口正常");
+    const health=await api().health({deep:true});
+    toast(health?.upstreams ? "设置已保存，行情上游连接正常" : "设置已保存，数据接口正常");
   }catch(x){
     toast("设置已保存；数据接口暂不可用，可稍后重试或手动输入成交价");
   }};
