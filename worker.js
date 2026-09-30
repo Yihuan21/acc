@@ -108,14 +108,31 @@ export default {
     if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
 
     if (u.pathname === "/api/health") {
-      return json({
+      const deep = u.searchParams.get("deep") === "1";
+      const result = {
         ok: true,
         service: "investment-simulator-api",
         worker: "investment-simulator-api",
         version: "2026-09-30",
         time: new Date().toISOString(),
         endpoints: ["/api/health", "/api/yahoo", "/api/fund"]
-      });
+      };
+      if (deep) {
+        const yahoo = await upstream(
+          "https://query2.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=1d",
+          YAHOO_HEADERS
+        );
+        const fund = await upstream(
+          "https://api.fund.eastmoney.com/f10/lsjz?fundCode=000001&pageIndex=1&pageSize=1",
+          EASTMONEY_HEADERS
+        );
+        result.upstreams = {
+          yahoo: { ok: yahoo.ok, status: yahoo.status },
+          eastmoney: { ok: fund.ok, status: fund.status }
+        };
+        result.ok = yahoo.ok && fund.ok;
+      }
+      return json(result, result.ok ? 200 : 502);
     }
 
     if (u.pathname === "/api/yahoo") {
