@@ -60,3 +60,21 @@ input,select{font-size:16px}
 
 /* interaction feedback */
 button{transition:transform .12s ease,opacity .12s ease,filter .12s ease,box-shadow .12s ease}button.is-pressed{transform:scale(.97);filter:brightness(1.12)}button.is-busy{position:relative;cursor:wait;opacity:.82;padding-left:36px!important}button.is-busy::before{content:"";position:absolute;left:13px;top:50%;width:13px;height:13px;margin-top:-7px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:button-spin .7s linear infinite}@keyframes button-spin{to{transform:rotate(360deg)}}button.is-success{box-shadow:0 0 0 2px #35c98a66}button.is-error{box-shadow:0 0 0 2px #ff5f7a66}.kline-crosshair-v,.kline-crosshair-h{stroke:#aebcff;stroke-width:1;stroke-dasharray:5 4;opacity:.75}.kline-crosshair-h{opacity:.45}.kline-hit{touch-action:pan-x pan-y}
+
+
+/* v2 investment workspace */
+.kline-status{margin-left:auto;font-size:12px;color:#7f8cff;padding:5px 9px;border-radius:999px;background:#111a31}
+.kline-indicators{display:flex;gap:14px;align-items:center;font-size:12px;color:#9eabc7}
+.kline-indicators label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.kline-indicators input{width:16px;height:16px;min-height:16px;accent-color:#7f8cff}
+.kline-volume{opacity:.38}
+.automation-card{background:linear-gradient(145deg,#151f39,#10172b);border-color:#6675ff33}
+.strategy-badge{font-size:11px;color:#8d9bff;background:#6d7cff18;border:1px solid #6d7cff33;border-radius:999px;padding:5px 9px}
+.automation-result{margin-top:14px}
+.automation-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-bottom:12px}
+.automation-summary>div{padding:12px;border-radius:13px;background:#0d1528;border:1px solid #ffffff09}
+.automation-summary small{display:block;color:#8794b0}
+.automation-summary b{display:block;margin-top:5px;font-size:17px}
+.strategy-plan{display:grid;gap:7px;max-height:360px;overflow:auto}
+.strategy-plan .row{background:#0d1528}
+@media(max-width:767px){.automation-summary{grid-template-columns:repeat(2,1fr)}.kline-status{margin-left:0}.kline-indicators{width:100%}}
