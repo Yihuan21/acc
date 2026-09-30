@@ -24,7 +24,7 @@ const buttonText=b=>b?.dataset.originalText||b?.textContent||"";
 function setButtonBusy(b,busy,label="处理中…"){if(!b)return;if(busy){if(!b.dataset.originalText)b.dataset.originalText=buttonText(b);b.disabled=true;b.classList.add("is-busy");b.setAttribute("aria-busy","true");if(label)b.textContent=label}else{b.disabled=false;b.classList.remove("is-busy");b.removeAttribute("aria-busy");if(b.dataset.originalText){b.textContent=b.dataset.originalText;delete b.dataset.originalText}}}
 function flashButton(b,ok=true){if(!b)return;b.classList.remove("is-success","is-error");void b.offsetWidth;b.classList.add(ok?"is-success":"is-error");setTimeout(()=>b.classList.remove("is-success","is-error"),900)}
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b||b.disabled)return;b.classList.add("is-pressed");setTimeout(()=>b.classList.remove("is-pressed"),180)},true);
-document.addEventListener("submit",e=>{const b=e.submitter;if(!b)return;setButtonBusy(b,true,"处理中…");clearTimeout(b.__busyTimer);b.__busyTimer=setTimeout(()=>setButtonBusy(b,false),30000)},true);const api=()=>new DataAPI(state.settings);
+document.addEventListener("submit",e=>{const b=e.submitter;if(!b)return;setButtonBusy(b,true,"处理中…");clearTimeout(b.__busyTimer);b.__busyTimer=setTimeout(()=>setButtonBusy(b,false),1500)},true);const api=()=>new DataAPI(state.settings);
 const quoteCacheKey=s=>String(s||"").trim().toUpperCase();
 const cachedQuote=s=>{try{return JSON.parse(localStorage.getItem("invest-quote:"+quoteCacheKey(s))||"null")}catch{return null}};
 const rememberQuote=(s,q)=>{try{localStorage.setItem("invest-quote:"+quoteCacheKey(s),JSON.stringify({...q,cachedAt:Date.now()}))}catch{}};
