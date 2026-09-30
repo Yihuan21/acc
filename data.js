@@ -177,6 +177,51 @@ export class DataAPI {
     };
   }
 
+  async intraday(symbol, { range = "1d", interval = "5m", assetType = "auto" } = {}) {
+    if (assetType === "fund") return [];
+    const safeInterval = ["1m","2m","5m","15m","30m","60m"].includes(interval) ? interval : "5m";
+    const safeRange = ["1d","5d","1mo","3mo"].includes(range) ? range : "1d";
+    const path = this.base ? "/api/yahoo" : "/v8/finance/chart/" + encodeURIComponent(symbol);
+    const params = { symbol, range: safeRange, interval: safeInterval, events: "div,splits" };
+    const json = await this.request(path, params);
+    const result = json?.chart?.result?.[0];
+    if (!result) throw new Error("分时数据为空");
+    const quote = result.indicators?.quote?.[0] || {};
+    const tz = result.meta?.exchangeTimezoneName || "UTC";
+    const timestamps = result.timestamp || [];
+    const rows = timestamps.map((ts, index) => {
+      const close = Number(quote.close?.[index]);
+      const open = Number(quote.open?.[index]);
+      const high = Number(quote.high?.[index]);
+      const low = Number(quote.low?.[index]);
+      if (![close].every(Number.isFinite) || close <= 0) return null;
+      const o = Number.isFinite(open) && open > 0 ? open : close;
+      const h = Number.isFinite(high) && high > 0 ? Math.max(high, o, close) : Math.max(o, close);
+      const l = Number.isFinite(low) && low > 0 ? Math.min(low, o, close) : Math.min(o, close);
+      const time = new Date(ts * 1000);
+      const parts = new Intl.DateTimeFormat("zh-CN", {
+        timeZone: tz, year:"numeric", month:"2-digit", day:"2-digit",
+        hour:"2-digit", minute:"2-digit", hour12:false
+      }).formatToParts(time).reduce((o,p)=>(o[p.type]=p.value,o),{});
+      return {
+        timestamp: ts * 1000,
+        date: parts.year + "-" + parts.month + "-" + parts.day,
+        time: parts.hour + ":" + parts.minute,
+        open:o, high:h, low:l, close,
+        volume:Number(quote.volume?.[index])||0
+      };
+    }).filter(Boolean);
+    const seen = new Set();
+    const clean = rows.filter(row => {
+      const key = String(row.timestamp);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (clean.length < 2) throw new Error("当前交易日分时数据不足");
+    return clean;
+  }
+
   async history(symbol, start, end, assetType = "auto") {
     if (assetType === "fund" && /^\d{6}$/.test(String(symbol))) {
       return this.fundHistory(String(symbol), start, end);
