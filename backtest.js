@@ -4,10 +4,10 @@ export const maxDrawdown=curve=>{let peak=-Infinity,dd=0,peakIndex=0,maxDuration
 const cleanBars=bars=>[...(bars||[])].filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&Number.isFinite(Number(x.close))&&Number(x.close)>0).map(x=>{const rawClose=Number(x.close);const adjClose=Number(x.adjClose);const useAdj=Number.isFinite(adjClose)&&adjClose>0;return{date:x.date,open:Number.isFinite(Number(useAdj?x.adjOpen:x.open))&&Number(useAdj?x.adjOpen:x.open)>0?Number(useAdj?x.adjOpen:x.open):Number(useAdj?adjClose:rawClose),high:Number(useAdj?x.adjHigh:x.high)||Number(useAdj?adjClose:rawClose),low:Number(useAdj?x.adjLow:x.low)||Number(useAdj?adjClose:rawClose),close:useAdj?adjClose:rawClose,rawClose,adjClose:useAdj?adjClose:rawClose,volume:Number(x.volume)||0}}).sort((a,b)=>a.date.localeCompare(b.date)).filter((x,i,a)=>i===0||x.date!==a[i-1].date).filter(x=>x.high>=Math.max(x.open,x.close)&&x.low<=Math.min(x.open,x.close));
 const sma=(bars,end,n)=>end-n+1<0?null:mean(bars.slice(end-n+1,end+1).map(x=>x.close));
 const rsi=(bars,end,n=14)=>{if(end<n)return null;let g=0,l=0;for(let i=end-n+1;i<=end;i++){const d=bars[i].close-bars[i-1].close;g+=Math.max(d,0);l+=Math.max(-d,0)}if(l===0)return 100;return 100-100/(1+g/l)};
-export function runBacktest(raw,{capital=100000,strategy="buyhold",feeRate=0.0005,slippage=0.0005,position=1,riskFreeRate=0,assetType="auto",buyFeeRate, sellFeeRate, minFee=0, stampDutyRate=0, lotSize=1}={}){
- const bars=cleanBars(raw);capital=Number(capital);feeRate=Math.max(0,Number(feeRate)||0);slippage=Math.max(0,Number(slippage)||0);position=Math.min(1,Math.max(.01,Number(position)||1));riskFreeRate=Number(riskFreeRate)||0;const buyRate=Math.max(0,Number(buyFeeRate??feeRate)||0),sellRate=Math.max(0,Number(sellFeeRate??feeRate)||0),minimumFee=Math.max(0,Number(minFee)||0),stampRate=Math.max(0,Number(stampDutyRate)||0),lot=Math.max(.000001,Number(lotSize)||1);
+export function runBacktest(raw,{capital=100000,strategy="buyhold",feeRate=0.0005,slippage=0.0005,position=1,riskFreeRate=0,assetType="auto",buyFeeRate, sellFeeRate, minFee=0, stampDutyRate=0, lotSize=1,riskLimit=0}={}){
+ const bars=cleanBars(raw);capital=Number(capital);feeRate=Math.max(0,Number(feeRate)||0);slippage=Math.max(0,Number(slippage)||0);position=Math.min(1,Math.max(.01,Number(position)||1));riskFreeRate=Number(riskFreeRate)||0;riskLimit=Math.min(.99,Math.max(0,Number(riskLimit)||0));const buyRate=Math.max(0,Number(buyFeeRate??feeRate)||0),sellRate=Math.max(0,Number(sellFeeRate??feeRate)||0),minimumFee=Math.max(0,Number(minFee)||0),stampRate=Math.max(0,Number(stampDutyRate)||0),lot=Math.max(.000001,Number(lotSize)||1);
  if(bars.length<2)throw Error("至少需要 2 个有效交易日");if(!Number.isFinite(capital)||capital<=0)throw Error("初始资金必须大于 0");
- let cash=capital,shares=0,tradeLog=[],curve=[],lastSignal="",lots=[];
+ let cash=capital,shares=0,tradeLog=[],curve=[],lastSignal="",lots=[],riskTriggered=false,riskTriggerDate="",riskTriggerDrawdown=0;
  const roundBuy=n=>Math.floor((n+1e-10)/lot)*lot;const roundSell=n=>n>=shares-1e-10?shares:Math.floor((n+1e-10)/lot)*lot;const feeFor=(gross,rate,stamp=0)=>gross<=0?0:Math.max(minimumFee,gross*rate)+gross*stamp;const buy=(i,p,n)=>{n=roundBuy(n);if(n<=0)return false;const px=p*(1+slippage);let gross=px*n,fee=feeFor(gross,buyRate);if(gross+fee>cash+1e-8){n=Math.floor((cash/(px*(1+buyRate)+1e-12))/lot)*lot;for(let j=0;j<3&&n>0;j++){gross=px*n;fee=feeFor(gross,buyRate);if(gross+fee<=cash+1e-8)break;n=Math.max(0,n-lot)}}if(n<=0)return false;gross=px*n;fee=feeFor(gross,buyRate);if(gross+fee>cash+1e-8)return false;cash-=gross+fee;shares+=n;lots.push({date:bars[i].date,buyDate:bars[i].date,qty:n});tradeLog.push({date:bars[i].date,side:"buy",price:px,qty:n,fee});return true};
  const sell=(i,p,n)=>{n=roundSell(n);if(n<=0||n>shares+1e-8)return false;const sellable=lots.filter(x=>x.buyDate<bars[i].date).reduce((sum,x)=>sum+x.qty,0);n=roundSell(Math.min(n,sellable));if(n<=0)return false;const px=p*(1-slippage),gross=px*n,fee=feeFor(gross,sellRate,stampRate);cash+=gross-fee;shares-=n;let remain=n;for(const lot of lots){if(remain<=0)break;if(lot.buyDate>=bars[i].date)continue;const used=Math.min(lot.qty,remain);lot.qty-=used;remain-=used}lots=lots.filter(x=>x.qty>1e-10);if(Math.abs(shares)<1e-10)shares=0;tradeLog.push({date:bars[i].date,side:"sell",price:px,qty:n,fee});return true};
  for(let i=0;i<bars.length;i++){
@@ -20,11 +20,23 @@ export function runBacktest(raw,{capital=100000,strategy="buyhold",feeRate=0.000
      if(strategy==="momentum"&&i>=21){const m=bars[i-1].close/bars[i-21].close-1;if(m>0.05&&lastSignal!=="long"){if(shares===0){const n=(cash*position)/(b.open*(1+slippage));buy(i,b.open,n)}lastSignal="long"}else if(m<-0.05&&lastSignal!=="flat"){if(shares>0)sell(i,b.open,shares);lastSignal="flat"}}
      if(strategy==="trend"&&i>=61){const f=sma(bars,i-1,20),slow=sma(bars,i-1,60),spread=(f-slow)/(bars[i-1].close||1);if(spread>0.01&&lastSignal!=="long"){if(shares===0){const n=(cash*position)/(b.open*(1+slippage));buy(i,b.open,n)}lastSignal="long"}else if(spread<-0.01&&lastSignal!=="flat"){if(shares>0)sell(i,b.open,shares);lastSignal="flat"}}
    }
-   curve.push(cash+shares*b.close);
+   let equity=cash+shares*b.close;
+   if(!riskTriggered&&riskLimit>0){
+     let peak=curve.length?Math.max(...curve):capital;
+     const dd=peak>0?(peak-equity)/peak:0;
+     if(dd>=riskLimit){
+       riskTriggered=true;riskTriggerDate=b.date;riskTriggerDrawdown=dd*100;
+       if(shares>0)sell(i,b.close,shares);
+       equity=cash+shares*b.close;
+       curve.push(equity);
+       continue;
+     }
+   }
+   curve.push(equity);
  }
  const final=curve.at(-1),daily=curve.slice(1).map((v,j)=>curve[j]>0?v/curve[j]-1:0),rfDaily=(1+riskFreeRate/100)**(1/252)-1,excess=daily.map(x=>x-rfDaily),vol=stdev(daily)*Math.sqrt(252),sh=stdev(excess)?mean(excess)/stdev(excess)*Math.sqrt(252):0;
  const downsideSq=excess.filter(x=>x<0).map(x=>x*x),downside=downsideSq.length?Math.sqrt(mean(downsideSq)):0,sortino=downside?mean(excess)/downside*Math.sqrt(252):0;
  const years=Math.max(1/365,(new Date(bars.at(-1).date)-new Date(bars[0].date))/31557600000),cum=(final/capital-1)*100,cagr=(final>0?(Math.pow(final/capital,1/years)-1)*100:-100),mdd=maxDrawdown(curve);
  const benchmarkPx=bars[1].open*(1+slippage),benchmarkQty=roundBuy((capital/(benchmarkPx*(1+buyRate)+1e-12))*position),benchmarkGross=benchmarkPx*benchmarkQty,benchmarkFee=benchmarkQty>0?feeFor(benchmarkGross,buyRate):0,benchmarkCash=capital-benchmarkGross-benchmarkFee,benchmark=benchmarkCash+benchmarkQty*bars.at(-1).close,benchmarkReturn=benchmark/capital-1,buys=tradeLog.filter(x=>x.side==="buy"),sells=tradeLog.filter(x=>x.side==="sell");const fees=tradeLog.reduce((s,x)=>s+x.fee,0);let drawdownPeak=0;const drawdownCurve=curve.map(v=>{drawdownPeak=Math.max(drawdownPeak,v);return drawdownPeak>0?(v/drawdownPeak-1)*100:0});
- return{bars,curve,drawdownCurve,final,cum,cagr,maxDrawdown:mdd.maxDrawdown*100,maxDrawdownDays:mdd.maxDuration,volatility:vol*100,sharpe:sh,sortino,trades:tradeLog.length,buys:buys.length,sells:sells.length,fees,benchmark,alpha:cum-benchmarkReturn*100,benchmarkReturn:benchmarkReturn*100,tradeLog,assetType,lotSize:lot};
+ return{bars,curve,drawdownCurve,final,cum,cagr,maxDrawdown:mdd.maxDrawdown*100,riskLimit:riskLimit*100,riskTriggered,riskTriggerDate,riskTriggerDrawdown,maxDrawdownDays:mdd.maxDuration,volatility:vol*100,sharpe:sh,sortino,trades:tradeLog.length,buys:buys.length,sells:sells.length,fees,benchmark,alpha:cum-benchmarkReturn*100,benchmarkReturn:benchmarkReturn*100,tradeLog,assetType,lotSize:lot};
 }
