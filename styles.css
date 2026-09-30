@@ -87,3 +87,11 @@ button{transition:transform .12s ease,opacity .12s ease,filter .12s ease,box-sha
 .strategy-signal{display:inline-flex;padding:6px 9px;border-radius:999px;background:var(--panel-2,#f3f5f8);font-size:12px}
 .strategy-signal.buy{border:1px solid rgba(40,150,90,.3)}
 .strategy-signal.sell{border:1px solid rgba(200,70,70,.3)}
+
+
+.automation-kline-inline{margin-top:14px;padding:14px;border-radius:16px;background:#0d1528;border:1px solid #ffffff09}
+.automation-kline-inline .panel-title,.strategy-trades .panel-title,.strategy-signals-panel .panel-title{align-items:center;gap:10px}
+.strategy-trades,.strategy-signals-panel{margin-top:14px;padding:14px;border-radius:16px;background:#0d1528;border:1px solid #ffffff09}
+.strategy-trade-row{background:#101a30!important}
+.strategy-trades .strategy-plan,.strategy-signals-panel .strategy-plan{max-height:420px}
+@media(max-width:767px){.automation-kline-inline,.strategy-trades,.strategy-signals-panel{padding:10px}}
