@@ -212,7 +212,7 @@ async function runAutomatedInvestment(){
   try{
     const k=sym(raw,t),bars=await history(k,a,b,t);if(bars.length<65)throw Error("该区间至少需要约 65 个交易日才能运行多数策略");
     const plan=generateStrategyPlan(bars,{strategy:st,initialCash:cap,position:pos});
-    const aShare=isAShareStock(raw,t),r=runBacktest(bars,{capital:cap,strategy:st,assetType:t,position:pos,feeRate:.0005,slippage:.0005,stampDutyRate:aShare?.0005:0,lotSize:aShare?aShareLot(raw):1});
+    const aShare=isAShareStock(raw,t),r=runBacktest(bars,{capital:cap,strategy:st,assetType:t,position:pos,feeRate:.0005,slippage:.0005,stampDutyRate:aShare?0.0005:0,lotSize:aShare?aShareLot(raw):1});
     const currency=aShare||t==="fund"?"CNY":"USD";$("#autoResult").classList.remove("empty");
     $("#autoResult").innerHTML='<div class="automation-summary"><div><small>策略</small><b>'+esc(strategyLabel(st))+'</b></div><div><small>期末资产</small><b>'+money(r.final,currency)+'</b></div><div><small>累计收益</small><b class="'+(r.cum>=0?"positive":"negative")+'">'+r.cum.toFixed(2)+'%</b></div><div><small>最大回撤</small><b class="negative">-'+r.maxDrawdown.toFixed(2)+'%</b></div><div><small>自动交易</small><b>'+r.trades+' 次</b></div></div><div class="strategy-plan">'+plan.slice(0,12).map(x=>'<div class="row"><span><b>'+x.date+'</b><small>'+esc(x.reason)+'</small></span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"自动买入":"自动卖出")+'</b></div>').join("")+'</div><p class="muted">信号只使用前一交易日数据，并在下一交易日开盘执行。</p>';
     toast("自动投资策略运行完成");
