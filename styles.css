@@ -157,3 +157,56 @@ main{min-width:0}
   .tabbar{grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}
   .tab{border-radius:11px}
 }
+
+/* FINAL RESPONSIVE WORKSPACE OVERRIDE */
+@media (min-width:700px){
+  body{overflow-x:hidden}
+  #app{width:auto!important;max-width:none!important;margin:0 0 0 244px!important;padding:0 0 32px!important}
+  .topbar{position:sticky!important;top:0!important;margin:0!important;padding:18px 32px!important;width:100%!important;min-height:88px;z-index:80}
+  main{width:100%!important;max-width:1500px!important;margin:0 auto!important}
+  .page{width:100%!important;max-width:1500px!important;margin:0 auto!important;padding:22px 34px 50px!important}
+  .tabbar{
+    position:fixed!important;left:0!important;right:auto!important;top:0!important;bottom:0!important;
+    width:244px!important;height:100vh!important;min-height:100vh!important;
+    margin:0!important;transform:none!important;
+    display:flex!important;flex-direction:column!important;align-items:stretch!important;
+    grid-template-columns:none!important;gap:6px!important;
+    padding:24px 14px!important;padding-bottom:24px!important;
+    border:0!important;border-right:1px solid #ffffff12!important;border-radius:0!important;
+    background:linear-gradient(180deg,#0a1020f8,#080d18f6)!important;
+    box-shadow:18px 0 50px #0004!important;backdrop-filter:blur(22px);
+    overflow-y:auto!important;overflow-x:hidden!important;z-index:200!important;
+  }
+  .nav-brand{display:flex!important}
+  .tabbar .tab{
+    display:grid!important;grid-template-columns:40px minmax(0,1fr)!important;
+    place-items:center start!important;width:100%!important;height:52px!important;min-height:52px!important;
+    padding:10px 14px!important;text-align:left!important;border:0!important;
+  }
+  .tabbar .tab span{font-size:14px!important;font-weight:700!important;align-self:center!important}
+  .tabbar .tab.active{background:linear-gradient(135deg,#6677ff26,#6677ff0b)!important}
+  #toast{z-index:300}
+  .kline-panel{position:relative;z-index:1}
+  .kline-chart{max-width:100%;overflow:hidden}
+  .automation-summary{grid-template-columns:repeat(5,minmax(0,1fr))}
+}
+@media (min-width:700px) and (max-width:1050px){
+  #app{margin-left:214px!important}
+  .tabbar{width:214px!important}
+  .page{padding-left:22px!important;padding-right:22px!important}
+  .topbar{padding-left:22px!important;padding-right:22px!important}
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .automation-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width:699px){
+  #app{margin-left:0!important}
+  .tabbar{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;height:74px!important;min-height:0!important;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;flex-direction:row!important;padding:8px 10px calc(8px + env(safe-area-inset-bottom))!important;border-top:1px solid #ffffff14!important;border-right:0!important;border-radius:0!important}
+}
+.strategy-signal{color:#dce5ff!important;background:#101a30!important;border:1px solid #33405f!important;box-shadow:none!important}
+.strategy-signal.buy{color:#4fd18b!important;border-color:#26734f!important;background:#10251e!important}
+.strategy-signal.sell{color:#ff7188!important;border-color:#713142!important;background:#28121a!important}
+.automation-kline-inline .kline-chart,.automation-kline-inline .kline-interactive{width:100%;max-width:100%;display:block}
+.automation-kline-inline{overflow:hidden}
+.strategy-trades,.strategy-signals-panel{overflow:hidden}
