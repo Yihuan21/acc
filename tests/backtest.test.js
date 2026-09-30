@@ -55,9 +55,9 @@ test("incoherent OHLC rows are excluded from the backtest",()=>{
 });
 
 test("benchmark respects lot size, position and entry fee",()=>{
-  const r=runBacktest(bars,{capital:10000,strategy:"buyhold",feeRate:0,buyFeeRate:.001,slippage:0,position:.5,lotSize:100});
+  const r=runBacktest(bars,{capital:1000000,strategy:"buyhold",feeRate:0,buyFeeRate:.001,slippage:0,position:.5,lotSize:100});
   const qty=49*100;
   const gross=qty*bars[1].open;
   const fee=gross*.001;
-  assert.equal(r.benchmark,10000-gross-fee+qty*bars.at(-1).close);
+  assert.equal(r.benchmark,1000000-gross-fee+qty*bars.at(-1).close);
 });
