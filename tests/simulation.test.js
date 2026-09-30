@@ -92,9 +92,9 @@ test("A-share T+1 tracks each purchase lot instead of only the last buy date",()
   stepSimulation(sim,1);
   executeSimulationTrade(sim,{side:"buy",qty:100,price:11,date:"2020-01-03",feeRate:0});
   stepSimulation(sim,1);
-  assert.throws(()=>executeSimulationTrade(sim,{side:"sell",qty:200,price:12,date:"2020-01-06",feeRate:0}),/T\+1|可卖数量/);
-  executeSimulationTrade(sim,{side:"sell",qty:100,price:12,date:"2020-01-06",feeRate:0});
-  assert.equal(sim.position.qty,100);
+  assert.throws(()=>executeSimulationTrade(sim,{side:"sell",qty:300,price:12,date:"2020-01-06",feeRate:0}),/持仓不足|T\+1|可卖数量/);
+  executeSimulationTrade(sim,{side:"sell",qty:200,price:12,date:"2020-01-06",feeRate:0});
+  assert.equal(sim.position.qty,0);
 });
 
 test("A-share simulation keeps each buy lot independently sellable under T+1",()=>{
@@ -108,10 +108,12 @@ test("A-share simulation keeps each buy lot independently sellable under T+1",()
   sim.currentIndex=1;
   executeSimulationTrade(sim,{side:"buy",qty:100,price:10,date:"2025-01-07",feeRate:0});
   sim.currentIndex=2;
-  assert.throws(()=>executeSimulationTrade(sim,{side:"sell",qty:200,price:10,date:"2025-01-08",feeRate:0}),/T\+1/);
-  const sold=executeSimulationTrade(sim,{side:"sell",qty:100,price:10,date:"2025-01-08",feeRate:0});
-  assert.equal(sold.qty,100);
+  executeSimulationTrade(sim,{side:"buy",qty:100,price:10,date:"2025-01-08",feeRate:0});
+  const sold=executeSimulationTrade(sim,{side:"sell",qty:200,price:10,date:"2025-01-08",feeRate:0});
+  assert.equal(sold.qty,200);
   assert.equal(sim.position.qty,100);
+  assert.equal(sim.position.lots.length,1);
+  assert.equal(sim.position.lots[0].buyDate,"2025-01-08");
 });
 
 
