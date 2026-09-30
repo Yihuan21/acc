@@ -113,3 +113,18 @@ test("A-share simulation keeps each buy lot independently sellable under T+1",()
   assert.equal(sold.qty,100);
   assert.equal(sim.position.qty,100);
 });
+
+
+test("US historical simulation permits same-day round trips",()=>{
+  const sim=createSimulation({symbol:"AAPL",capital:1000,bars});
+  executeSimulationTrade(sim,{side:"buy",qty:10,price:10,date:"2020-01-02",feeRate:0});
+  const sold=executeSimulationTrade(sim,{side:"sell",qty:10,price:10,date:"2020-01-02",feeRate:0});
+  assert.equal(sold.qty,10);
+  assert.equal(sim.position.qty,0);
+  assert.equal(sim.cash,1000);
+});
+
+test("historical simulation rejects unknown trade directions",()=>{
+  const sim=createSimulation({symbol:"AAPL",capital:1000,bars});
+  assert.throws(()=>executeSimulationTrade(sim,{side:"hold",qty:1,price:10,date:"2020-01-02",feeRate:0}),/交易方向无效/);
+});
