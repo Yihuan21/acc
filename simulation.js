@@ -96,7 +96,7 @@ export function isAShareStock(symbol,assetType="auto"){
 }
 export function aShareLot(symbol){const s=String(symbol||"").trim().toUpperCase().replace(/\.(SS|SZ)$/,"");return /^68\d{4}$/.test(s)?200:100;}
 
-export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,stampDutyRate=0.0005}={}){
+export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,stampDutyRate=0.0005}){
   const bar=currentBar(sim);
   if(!bar)throw new Error("当前没有历史交易日");
   const tradeDate=String(date||bar.date).slice(0,10);
@@ -106,11 +106,18 @@ export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,s
   if(!Number.isFinite(executionPrice)||executionPrice<=0)throw new Error("成交价必须大于 0");
   const aShare=isAShareStock(sim.symbol,sim.assetType);
   const lot=aShare?aShareLot(sim.symbol):1;
+  if(!Array.isArray(sim.position.lots)) {
+    sim.position.lots=[];
+    if(Number(sim.position.qty)>0) sim.position.lots.push({qty:Number(sim.position.qty),buyDate:String(sim.position.lastBuyDate||"")});
+  }
   if(aShare&&side==="buy")quantity=Math.floor(quantity/lot)*lot;
-  if(aShare&&side==="sell"&&quantity%lot!==0)quantity=Math.floor(quantity/lot)*lot;
+  if(aShare&&side==="sell")quantity=Math.floor(quantity/lot)*lot;
   if(quantity<=0)throw new Error("A股买入数量需满足最小交易单位");
-  if(side==="sell"&&quantity>sim.position.qty)throw new Error("持仓不足");
-  if(aShare&&side==="sell"&&sim.position.lastBuyDate===tradeDate)throw new Error("A股实行T+1，今日买入的持仓不能今日卖出");
+  if(side==="sell"){
+    const sellable=sim.position.lots.filter(x=>String(x.buyDate)<tradeDate).reduce((sum,x)=>sum+Number(x.qty||0),0);
+    if(quantity>sim.position.qty)throw new Error("持仓不足");
+    if(quantity>sellable)throw new Error("A股实行T+1，当前还有今日买入的持仓不可卖出");
+  }
   const gross=executionPrice*quantity;
   const fee=gross*Math.max(0,Number(feeRate)||0)+(aShare&&side==="sell"?gross*Math.max(0,Number(stampDutyRate)||0):0);
   if(side==="buy"){
@@ -118,14 +125,25 @@ export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,s
     sim.position.avg=(sim.position.avg*sim.position.qty+gross+fee)/(sim.position.qty+quantity);
     sim.position.qty+=quantity;
     sim.position.lastBuyDate=tradeDate;
+    sim.position.lots.push({qty:quantity,buyDate:tradeDate});
     sim.cash-=gross+fee;
   }else{
     sim.cash+=gross-fee;
     sim.position.qty-=quantity;
+    let remain=quantity;
+    for(const lotItem of sim.position.lots){
+      if(remain<=0)break;
+      if(String(lotItem.buyDate)>=tradeDate)continue;
+      const used=Math.min(Number(lotItem.qty||0),remain);
+      lotItem.qty-=used;
+      remain-=used;
+    }
+    sim.position.lots=sim.position.lots.filter(x=>Number(x.qty)>0);
     if(sim.position.qty<=0){
       sim.position.qty=0;
       sim.position.avg=0;
-      sim.position.lastBuyDate="";\n      sim.position.lots=[];
+      sim.position.lastBuyDate="";
+      sim.position.lots=[];
     }
   }
   sim.position.price=executionPrice;
