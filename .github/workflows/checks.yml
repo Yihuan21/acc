@@ -17,5 +17,7 @@ jobs:
           node --check app.js
           node --check data.js
           node --check backtest.js
+          node --check simulation.js
           node --check worker.js
-          node --test tests/*.test.js
+          npm test
+          npm run check
