@@ -96,3 +96,20 @@ test("A-share T+1 tracks each purchase lot instead of only the last buy date",()
   executeSimulationTrade(sim,{side:"sell",qty:100,price:12,date:"2020-01-06",feeRate:0});
   assert.equal(sim.position.qty,100);
 });
+
+test("A-share simulation keeps each buy lot independently sellable under T+1",()=>{
+  const bars=[
+    {date:"2025-01-06",open:10,high:10,low:10,close:10},
+    {date:"2025-01-07",open:10,high:10,low:10,close:10},
+    {date:"2025-01-08",open:10,high:10,low:10,close:10}
+  ];
+  const sim=createSimulation({symbol:"600000",assetType:"stock",capital:10000,bars,startIndex:0});
+  executeSimulationTrade(sim,{side:"buy",qty:100,price:10,date:"2025-01-06",feeRate:0});
+  sim.currentIndex=1;
+  executeSimulationTrade(sim,{side:"buy",qty:100,price:10,date:"2025-01-07",feeRate:0});
+  sim.currentIndex=2;
+  assert.throws(()=>executeSimulationTrade(sim,{side:"sell",qty:200,price:10,date:"2025-01-08",feeRate:0}),/T\+1/);
+  const sold=executeSimulationTrade(sim,{side:"sell",qty:100,price:10,date:"2025-01-08",feeRate:0});
+  assert.equal(sold.qty,100);
+  assert.equal(sim.position.qty,100);
+});
