@@ -19,7 +19,12 @@ export function createSimulation({symbol,assetType="auto",capital=100000,bars,st
   if(clean.length<2) throw new Error("历史数据不足，至少需要 2 个交易日");
   const cash=Number(capital);
   const key=String(symbol||"").toUpperCase();
-  const currency=assetType==="fund"||/^\d{6}$/.test(key)||/\.SS$|\.SZ$/.test(key)?"CNY":"USD";
+  const currency =
+    assetType === "fund" ||
+    /\.SS$|\.SZ$/.test(key) ||
+    /^(60|68|00|30|5)\d{4}$/.test(key)
+      ? "CNY"
+      : "USD";
   if(!Number.isFinite(cash)||cash<=0) throw new Error("初始资金必须大于 0");
   return {
     version:1,
@@ -68,7 +73,7 @@ export function stepSimulation(sim,delta=1){
 }
 export function jumpSimulationToDate(sim,date){
   if(!sim?.bars?.length)return sim;
-  const target=String(date||"");
+  const target=String(date||"").slice(0,10);
   let idx=sim.bars.findIndex(b=>b.date>=target);
   if(idx<0)idx=sim.bars.length-1;
   const floor=latestTradeIndex(sim);
