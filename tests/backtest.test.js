@@ -45,3 +45,11 @@ test("backtest uses adjusted OHLC consistently when provided",()=>{
   assert.equal(r.tradeLog[0].price,51);
   assert.equal(r.final,1057);
 });
+
+test("incoherent OHLC rows are excluded from the backtest",()=>{
+  const bad={date:"2025-04-01",open:100,high:90,low:95,close:100,volume:1};
+  const good={date:"2025-04-02",open:100,high:101,low:99,close:100,volume:1};
+  const good2={date:"2025-04-03",open:100,high:101,low:99,close:102,volume:1};
+  const r=runBacktest([bad,good,good2],{capital:10000,strategy:"buyhold",feeRate:0,slippage:0});
+  assert.equal(r.bars[0].date,"2025-04-02");
+});
