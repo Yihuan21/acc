@@ -197,9 +197,13 @@ export class DataAPI {
       return (result.timestamp||[]).map((timestamp,index)=>{
         const rawOpen=Number(quote.open?.[index]),rawHigh=Number(quote.high?.[index]),rawLow=Number(quote.low?.[index]),rawClose=Number(quote.close?.[index]),adjClose=Number(adjusted[index]);
         const factor=Number.isFinite(rawClose)&&rawClose>0&&Number.isFinite(adjClose)&&adjClose>0?adjClose/rawClose:1;
+        const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
+        const open = Number.isFinite(rawOpen) && rawOpen > 0 ? rawOpen : rawClose;
+        const high = Number.isFinite(rawHigh) && rawHigh > 0 ? Math.max(rawHigh, open, rawClose) : Math.max(open, rawClose);
+        const low = Number.isFinite(rawLow) && rawLow > 0 ? Math.min(rawLow, open, rawClose) : Math.min(open, rawClose);
         return {
-          date:new Date(timestamp*1000).toISOString().slice(0,10),
-          open:rawOpen,high:rawHigh,low:rawLow,close:rawClose,
+          date,
+          open,high,low,close:rawClose,
           adjOpen:Number.isFinite(rawOpen)&&rawOpen>0?rawOpen*factor:rawOpen,
           adjHigh:Number.isFinite(rawHigh)&&rawHigh>0?rawHigh*factor:rawHigh,
           adjLow:Number.isFinite(rawLow)&&rawLow>0?rawLow*factor:rawLow,
