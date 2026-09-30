@@ -9,7 +9,7 @@ export function normalizeSimulationBars(bars){
       low:Number(b?.low),
       close:Number(b?.close)
     }))
-    .filter(b=>/^\d{4}-\d{2}-\d{2}$/.test(b.date)&&Number.isFinite(b.close)&&b.close>0)
+    .filter(b=>/^\d{4}-\d{2}-\d{2}$/.test(b.date)&&Number.isFinite(b.close)&&b.close>0&&Number.isFinite(b.open)&&b.open>0&&Number.isFinite(b.high)&&b.high>0&&Number.isFinite(b.low)&&b.low>0&&b.high>=Math.max(b.open,b.close)&&b.low<=Math.min(b.open,b.close))
     .sort((a,b)=>a.date.localeCompare(b.date))
     .filter(b=>{if(seen.has(b.date))return false;seen.add(b.date);return true});
 }
@@ -107,7 +107,7 @@ export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,s
   const aShare=isAShareStock(sim.symbol,sim.assetType);
   const lot=aShare?aShareLot(sim.symbol):1;
   if(aShare&&side==="buy")quantity=Math.floor(quantity/lot)*lot;
-  if(aShare&&side==="sell"&&quantity<sim.position.qty&&quantity%lot!==0)quantity=Math.floor(quantity/lot)*lot;
+  if(aShare&&side==="sell"&&quantity%lot!==0)quantity=Math.floor(quantity/lot)*lot;
   if(quantity<=0)throw new Error("A股买入数量需满足最小交易单位");
   if(side==="sell"&&quantity>sim.position.qty)throw new Error("持仓不足");
   if(aShare&&side==="sell"&&sim.position.lastBuyDate===tradeDate)throw new Error("A股实行T+1，今日买入的持仓不能今日卖出");
