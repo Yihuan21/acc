@@ -22,5 +22,5 @@ test("navigation and chart controls are wired",()=>{
   assert.ok(app.includes('$$("[data-symbol]")'));
 });
 test("collection iteration never uses the single-element selector helper",()=>{
-  assert.equal(/\$\(\s*["'][^"']+["']\s*\)\.forEach\s*\(/.test(app),false);
+  assert.equal(/(?<!\$)\$\(\s*["'][^"']+["']\s*\)\.forEach\s*\(/.test(app),false);
 });
