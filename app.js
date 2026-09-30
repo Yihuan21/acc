@@ -1,6 +1,6 @@
-import {DataAPI} from "./data.js?v=20260930-04";
-import {runBacktest} from "./backtest.js?v=20260930-04";
-import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-04";
+import {DataAPI} from "./data.js?v=20260930-05";
+import {runBacktest} from "./backtest.js?v=20260930-05";
+import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-05";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
@@ -78,7 +78,8 @@ function render(){
  renderSimulation();
 }
 $("#quoteForm").onsubmit=async e=>{e.preventDefault();const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(!raw)return toast("请输入代码");try{toast("正在获取行情…");const q=await quote(raw,t),k=sym(raw,t),c=q.currency||((t==="fund"||/^\\d{6}$/.test(raw))?"CNY":"USD");state.recent=[k,...state.recent.filter(x=>x!==k)].slice(0,10);save();$("#quoteResult").innerHTML='<div class="panel"><div class="muted">'+q.symbol+" · "+q.name+" · "+assetLabel(q.assetType||t)+'</div><div class="quote-main">'+(c==="USD"?"$":"¥")+num(q.price)+'</div><div class="'+(q.change>=0?"positive":"negative")+'">'+(q.change>=0?"+":"")+num(q.change)+"（"+(q.changePct>=0?"+":"")+q.changePct.toFixed(2)+"%）"+'</div><div class="asset-row"><span>最高 <b>'+num(q.high)+'</b></span><span>最低 <b>'+num(q.low)+'</b></span><span>币种 <b>'+c+"</b></span></div></div>";render();try{await loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m")}catch(x){$("#klineInfo").textContent="K线加载失败："+x.message;$("#klineChart").innerHTML=""}}catch(x){toast("行情获取失败："+x.message);$("#quoteResult").innerHTML='<div class="panel"><b>获取失败</b><p class="muted">'+x.message+'</p><p class="muted">如果使用 GitHub Pages，请到「设置」填写 Cloudflare Worker API 地址。</p></div>'}};
-$$("[data-range]").forEach(b=>b.onclick=async()=>{const active=$$("#klineRange .chip");active.forEach(x=>x.classList.toggle("active",x===b));const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(!raw)return toast("请先查询标的");try{b.disabled=true;await loadKline(raw,t,b.dataset.range)}catch(x){$("#klineInfo").textContent="K线加载失败："+x.message}finally{b.disabled=false}});$("#tradeForm").onsubmit=async e=>{e.preventDefault();const raw=$("#tradeSymbol").value.trim(),t=assetType($("#tradeType").value),k=sym(raw,t),side=$("#tradeSide").value;let qty=Number($("#tradeQty").value),fr=Math.max(0,Number($("#tradeFee").value)||0);if(!k||qty<=0)return toast("请填写交易信息");const aShare=isAShareStock(raw,t),lot=aShare?aShareLot(raw):1;try{let price=Number($("#tradePrice").value),cur="CNY";if(!price){try{const q=await quote(k,t);price=q.price;cur=q.currency||((t==="fund"||aShare)?"CNY":"USD")}catch(liveError){const cached=cachedQuote(k),existing=state.positions[k];if(cached&&Number.isFinite(Number(cached.price))){price=Number(cached.price);cur=cached.currency||((t==="fund"||aShare)?"CNY":"USD");toast("实时行情暂不可用，已使用最近缓存价格")}else if(existing&&Number.isFinite(Number(existing.price))&&Number(existing.price)>0){price=Number(existing.price);cur=existing.currency||((t==="fund"||aShare)?"CNY":"USD");toast("实时行情暂不可用，已使用持仓最新价格")}else{throw new Error("实时价格获取失败，请在“成交价”中手动输入价格（原始错误："+(liveError?.message||liveError)+"）")}}}else{cur=(t==="fund"||aShare)?"CNY":"USD"}const p=state.positions[k]||{symbol:k,qty:0,avg:0,price,currency:cur,assetType:t,lots:[]};if(!Array.isArray(p.lots)){p.lots=[];if(Number(p.qty)>0)p.lots.push({qty:Number(p.qty),buyDate:String(p.lastBuyDate||"")})}if(aShare){qty=Math.floor(qty/lot)*lot;if(qty<=0)return toast("A股交易数量需为"+lot+"股的整数倍");if(side==="sell"){const sellable=p.lots.filter(x=>String(x.buyDate)<localDate()).reduce((sum,x)=>sum+Number(x.qty||0),0);if(qty>p.qty)return toast("持仓不足");if(qty>sellable)return toast("A股实行T+1，今日买入的持仓不能今日卖出")}}const stamp=aShare&&side==="sell"?0.0005:0;const gross=price*qty,fee=gross*fr+gross*stamp,fx=cur==="USD"?Number(state.settings.usdCny||7.2):1,cost=(gross+fee)*fx,proceeds=(gross-fee)*fx;if(side==="buy"){if(cost>state.cash)return toast("现金不足");p.avg=(p.avg*p.qty+gross+fee)/(p.qty+qty);p.qty+=qty;p.lastBuyDate=localDate();p.lots.push({qty,buyDate:localDate()});state.cash-=cost}else{if(qty>p.qty)return toast("持仓不足");state.cash+=proceeds;let remain=qty;for(const lotItem of p.lots){if(remain<=0)break;if(aShare&&String(lotItem.buyDate)>=localDate())continue;const used=Math.min(Number(lotItem.qty||0),remain);lotItem.qty-=used;remain-=used}p.lots=p.lots.filter(x=>Number(x.qty)>0);p.qty-=qty}if(p.qty<=0){p.qty=0;p.avg=0;p.lastBuyDate="";p.lots=[]}p.price=price;p.currency=cur;p.assetType=p.assetType||t;if(p.qty)state.positions[k]=p;else delete state.positions[k];state.trades.push({symbol:k,side,qty,price,total:gross,fee,currency:cur,cashImpact:side==="buy"?-cost:proceeds,time:Date.now(),assetType:t,stampDuty:stamp});save();render();toast(aShare?"模拟交易已执行（A股规则）":"模拟交易已执行")}catch(x){console.error(x);toast("交易失败："+x.message);}};
+$("[data-range]").forEach(b=>b.onclick=async()=>{const active=$("#klineRange .chip");active.forEach(x=>x.classList.toggle("active",x===b));const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(!raw)return toast("请先查询标的");try{b.disabled=true;await loadKline(raw,t,b.dataset.range)}catch(x){$("#klineInfo").textContent="K线加载失败："+x.message}finally{b.disabled=false}});
+$("[data-kline-mode]").forEach(b=>b.onclick=async()=>{const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(!raw)return toast("请先查询标的");$("[data-kline-mode]").forEach(x=>x.classList.toggle("active",x===b));try{b.disabled=true;if(b.dataset.klineMode==="intraday")await loadIntraday(raw,t);else await loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m")}catch(x){$("#klineInfo").textContent="行情图加载失败："+x.message;$("#klineChart").innerHTML=""}finally{b.disabled=false}});$("#tradeForm").onsubmit=async e=>{e.preventDefault();const raw=$("#tradeSymbol").value.trim(),t=assetType($("#tradeType").value),k=sym(raw,t),side=$("#tradeSide").value;let qty=Number($("#tradeQty").value),fr=Math.max(0,Number($("#tradeFee").value)||0);if(!k||qty<=0)return toast("请填写交易信息");const aShare=isAShareStock(raw,t),lot=aShare?aShareLot(raw):1;try{let price=Number($("#tradePrice").value),cur="CNY";if(!price){try{const q=await quote(k,t);price=q.price;cur=q.currency||((t==="fund"||aShare)?"CNY":"USD")}catch(liveError){const cached=cachedQuote(k),existing=state.positions[k];if(cached&&Number.isFinite(Number(cached.price))){price=Number(cached.price);cur=cached.currency||((t==="fund"||aShare)?"CNY":"USD");toast("实时行情暂不可用，已使用最近缓存价格")}else if(existing&&Number.isFinite(Number(existing.price))&&Number(existing.price)>0){price=Number(existing.price);cur=existing.currency||((t==="fund"||aShare)?"CNY":"USD");toast("实时行情暂不可用，已使用持仓最新价格")}else{throw new Error("实时价格获取失败，请在“成交价”中手动输入价格（原始错误："+(liveError?.message||liveError)+"）")}}}else{cur=(t==="fund"||aShare)?"CNY":"USD"}const p=state.positions[k]||{symbol:k,qty:0,avg:0,price,currency:cur,assetType:t,lots:[]};if(!Array.isArray(p.lots)){p.lots=[];if(Number(p.qty)>0)p.lots.push({qty:Number(p.qty),buyDate:String(p.lastBuyDate||"")})}if(aShare){qty=Math.floor(qty/lot)*lot;if(qty<=0)return toast("A股交易数量需为"+lot+"股的整数倍");if(side==="sell"){const sellable=p.lots.filter(x=>String(x.buyDate)<localDate()).reduce((sum,x)=>sum+Number(x.qty||0),0);if(qty>p.qty)return toast("持仓不足");if(qty>sellable)return toast("A股实行T+1，今日买入的持仓不能今日卖出")}}const stamp=aShare&&side==="sell"?0.0005:0;const gross=price*qty,fee=gross*fr+gross*stamp,fx=cur==="USD"?Number(state.settings.usdCny||7.2):1,cost=(gross+fee)*fx,proceeds=(gross-fee)*fx;if(side==="buy"){if(cost>state.cash)return toast("现金不足");p.avg=(p.avg*p.qty+gross+fee)/(p.qty+qty);p.qty+=qty;p.lastBuyDate=localDate();p.lots.push({qty,buyDate:localDate()});state.cash-=cost}else{if(qty>p.qty)return toast("持仓不足");state.cash+=proceeds;let remain=qty;for(const lotItem of p.lots){if(remain<=0)break;if(aShare&&String(lotItem.buyDate)>=localDate())continue;const used=Math.min(Number(lotItem.qty||0),remain);lotItem.qty-=used;remain-=used}p.lots=p.lots.filter(x=>Number(x.qty)>0);p.qty-=qty}if(p.qty<=0){p.qty=0;p.avg=0;p.lastBuyDate="";p.lots=[]}p.price=price;p.currency=cur;p.assetType=p.assetType||t;if(p.qty)state.positions[k]=p;else delete state.positions[k];state.trades.push({symbol:k,side,qty,price,total:gross,fee,currency:cur,cashImpact:side==="buy"?-cost:proceeds,time:Date.now(),assetType:t,stampDuty:stamp});save();render();toast(aShare?"模拟交易已执行（A股规则）":"模拟交易已执行")}catch(x){console.error(x);toast("交易失败："+x.message);}};
 function maValues(bars,n){return bars.map((_,i)=>i+1<n?null:bars.slice(i-n+1,i+1).reduce((s,x)=>s+x.close,0)/n)}
 function normalizeKlineBars(bars){
   return (bars||[]).map(b=>{
@@ -89,11 +90,17 @@ function normalizeKlineBars(bars){
     return {...b,open,high:Math.max(high,open,close),low:Math.min(low,open,close),close};
   }).filter(b=>b.date&&Number.isFinite(b.close)&&b.close>0&&Number.isFinite(b.open)&&Number.isFinite(b.high)&&Number.isFinite(b.low));
 }
-function klineSVG(bars){
-  const data=normalizeKlineBars(bars).slice(-600),W=1100,H=430,pl=48,pr=18,pt=18,pb=42;
+function escapeHTML(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function klinePointHTML(b,prev,type="daily"){
+  const change=prev&&Number(prev.close)>0?(Number(b.close)/Number(prev.close)-1)*100:0;
+  const time=type==="intraday"?(b.date+" "+b.time):b.date;
+  return '<div class="kline-point-title">'+escapeHTML(time)+'</div><div class="kline-point-grid"><span>开 <b>'+num(b.open)+'</b></span><span>高 <b>'+num(b.high)+'</b></span><span>低 <b>'+num(b.low)+'</b></span><span>收 <b>'+num(b.close)+'</b></span><span>涨跌 <b class="'+(change>=0?"positive":"negative")+'">'+(change>=0?"+":"")+change.toFixed(2)+'%</b></span><span>成交量 <b>'+num(b.volume||0)+'</b></span></div>';
+}
+function klineSVG(bars,{type="daily"}={}){
+  const data=normalizeKlineBars(bars).slice(-600),W=1100,H=430,pl=58,pr=18,pt=18,pb=42;
   if(!data.length)return "";
   const highs=data.map(x=>x.high),lows=data.map(x=>x.low),hi=Math.max(...highs),lo=Math.min(...lows),span=hi-lo||1;
-  const chartH=H-pt-pb,step=(W-pl-pr)/Math.max(1,data.length),body=Math.max(2,Math.min(9,step*.62));
+  const chartH=H-pt-pb,step=(W-pl-pr)/Math.max(1,data.length),body=Math.max(2,Math.min(10,step*.62));
   const y=v=>pt+(hi-v)/span*chartH, x=i=>pl+(i+.5)*step;
   const grid=[0,.25,.5,.75,1].map(t=>{const yy=pt+t*chartH,val=hi-t*span;return '<line class="kline-grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+yy+'" y2="'+yy+'"/><text class="kline-axis" x="4" y="'+(yy+4)+'">'+num(val)+'</text>'}).join("");
   const candles=data.map((b,i)=>{
@@ -101,10 +108,29 @@ function klineSVG(bars){
     const top=Math.min(yyO,yyC),height=Math.max(1,Math.abs(yyC-yyO));
     return '<line class="'+cls+'" x1="'+xx+'" x2="'+xx+'" y1="'+yyH+'" y2="'+yyL+'"/><rect class="'+cls+'" x="'+(xx-body/2)+'" y="'+top+'" width="'+body+'" height="'+height+'"/>';
   }).join("");
-
-  const maPath=(n,cls)=>{const vals=maValues(data,n),pts=vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);return pts.length>1?'<polyline class="'+cls+'" points="'+pts.map(p=>p.join(",")).join(" ")+'"/>':""};
-  const labels=[0,Math.floor(data.length/3),Math.floor(data.length*2/3),data.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>'<text class="kline-axis" text-anchor="middle" x="'+x(i)+'" y="'+(H-12)+'">'+data[i].date.slice(0,10)+'</text>').join("");
-  return '<div class="kline-scroll"><svg class="kline-svg" viewBox="0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="日K线图">'+grid+candles+maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60")+labels+'</svg></div><div class="kline-legend"><span>■ MA5</span><span>■ MA20</span><span>■ MA60</span><span>红涨绿跌</span></div>';
+  const maPath=type==="daily"?(n,cls)=>{const vals=maValues(data,n),pts=vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);return pts.length>1?'<polyline class="'+cls+'" points="'+pts.map(p=>p.join(",")).join(" ")+'"/>':"":()=>"";  
+  const labels=[0,Math.floor(data.length/3),Math.floor(data.length*2/3),data.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>'<text class="kline-axis" text-anchor="middle" x="'+x(i)+'" y="'+(H-12)+'">'+escapeHTML(type==="intraday"?data[i].time:data[i].date)+'</text>').join("");
+  const hitAreas=data.map((b,i)=>'<rect class="kline-hit" data-kline-index="'+i+'" x="'+(x(i)-Math.max(step/2,8))+'" y="'+pt+'" width="'+Math.max(step,16)+'" height="'+chartH+'" fill="transparent"/>').join("");
+  return '<div class="kline-interactive" data-kline-type="'+type+'"><div class="kline-scroll"><svg class="kline-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+(type==="intraday"?"分时K线":"日K线")+'">'+grid+candles+(type==="daily"?maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60"):"")+labels+hitAreas+'</svg></div><div class="kline-tooltip" hidden></div><div class="kline-legend"><span>'+ (type==="intraday"?"5分钟K · 当日":"日K · 每个交易日") +'</span>'+(type==="daily"?'<span>MA5</span><span>MA20</span><span>MA60</span>':"")+'<span>移动/点按图表查看精确坐标</span></div></div>';
+}
+function bindKlineInteraction(root,bars,type="daily"){
+  if(!root)return;
+  const data=normalizeKlineBars(bars).slice(-600),tooltip=root.querySelector(".kline-tooltip"),svg=root.querySelector(".kline-svg");
+  if(!svg||!tooltip)return;
+  const show=index=>{
+    const i=Math.max(0,Math.min(data.length-1,Number(index)||0)),b=data[i],prev=data[i-1];
+    tooltip.innerHTML=klinePointHTML(b,prev,type);
+    tooltip.hidden=false;
+    const area=svg.querySelector('[data-kline-index="'+i+'"]');
+    if(area){const ar=area.getBoundingClientRect(),rr=root.getBoundingClientRect();tooltip.style.left=Math.max(4,Math.min(rr.width-tooltip.offsetWidth-4,ar.left-rr.left+ar.width/2-tooltip.offsetWidth/2))+"px";tooltip.style.top=Math.max(4,ar.top-rr.top-tooltip.offsetHeight-8)+"px"}
+  };
+  root.querySelectorAll(".kline-hit").forEach(el=>{
+    el.addEventListener("pointermove",()=>show(el.dataset.klineIndex));
+    el.addEventListener("pointerdown",()=>show(el.dataset.klineIndex));
+    el.addEventListener("focus",()=>show(el.dataset.klineIndex));
+    el.setAttribute("tabindex","0");
+  });
+  show(data.length-1);
 }
 async function loadKline(raw,t,range){
   const k=sym(raw,t),endDate=new Date(),startDate=new Date(endDate);
@@ -114,8 +140,17 @@ async function loadKline(raw,t,range){
   else startDate.setFullYear(startDate.getFullYear()-40);
   const bars=await history(k,iso(startDate),iso(endDate),t);
   if(bars.length<2)throw Error("K线历史数据不足");
-  $("#klineInfo").textContent=(t==="fund"?"净值曲线 · ":"日K · ")+bars.length+" 个交易日 · "+bars[0].date+" → "+bars.at(-1).date;
-  $("#klineChart").innerHTML=klineSVG(bars);
+  $("#klineInfo").textContent="日K · "+bars.length+" 个交易日 · "+bars[0].date+" → "+bars.at(-1).date;
+  $("#klineChart").innerHTML=klineSVG(bars,{type:"daily"});
+  bindKlineInteraction($("#klineChart .kline-interactive"),bars,"daily");
+}
+async function loadIntraday(raw,t){
+  const k=sym(raw,t);
+  if(t==="fund")throw Error("基金没有连续交易时段分时数据");
+  const bars=await api().intraday(k,{range:"1d",interval:"5m",assetType:t});
+  $("#klineInfo").textContent="分时K · 5分钟 · "+bars.length+" 个数据点 · "+bars[0].date+" "+bars[0].time+" → "+bars.at(-1).date+" "+bars.at(-1).time;
+  $("#klineChart").innerHTML=klineSVG(bars,{type:"intraday"});
+  bindKlineInteraction($("#klineChart .kline-interactive"),bars,"intraday");
 }
 function chart(a){if(!a.length)return"";const w=900,h=240,p=18,lo=Math.min(...a),hi=Math.max(...a),s=hi-lo||1,pts=a.map((v,i)=>p+i*(w-2*p)/Math.max(1,a.length-1)+","+((h-p)-(v-lo)/s*(h-2*p))).join(" ");return'<svg class="chart" viewBox="0 0 '+w+" "+h+'" preserveAspectRatio="none"><polyline points="'+pts+'" fill="none" stroke="currentColor" stroke-width="3"/></svg>'}
 async function loadHistoricalSimulation(){
