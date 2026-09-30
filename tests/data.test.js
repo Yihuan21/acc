@@ -31,3 +31,15 @@ test("fund history remains NAV data without fake OHLC variation", async ()=>{
   assert.equal(rows[0].high,rows[0].close);
   assert.equal(rows[0].low,rows[0].close);
 });
+
+test("Yahoo history repairs missing OHLC fields without creating impossible candles", async ()=>{
+  const api=new DataAPI();
+  api.request=async()=>({chart:{result:[{
+    timestamp:[1704067200],
+    indicators:{quote:[{open:[null],high:[null],low:[null],close:[100],volume:[100]}]}
+  }]}});
+  const rows=await api.history("TEST","2024-01-01","2024-01-02");
+  assert.equal(rows[0].open,100);
+  assert.equal(rows[0].high,100);
+  assert.equal(rows[0].low,100);
+});
