@@ -1,6 +1,6 @@
-import {DataAPI} from "./data.js?v=20260930-06";
-import {runBacktest} from "./backtest.js?v=20260930-06";
-import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-06";
+import {DataAPI} from "./data.js?v=20260930-07";
+import {runBacktest} from "./backtest.js?v=20260930-07";
+import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-07";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const money=(v,c="CNY")=>{const cur=String(c||"CNY").toUpperCase();return new Intl.NumberFormat(cur==="USD"?"en-US":"zh-CN",{style:"currency",currency:cur==="USD"?"USD":"CNY",maximumFractionDigits:2}).format(Number(v)||0)};
 const num=v=>Number(v||0).toLocaleString("en-US",{maximumFractionDigits:4}), iso=d=>new Date(d).toISOString().slice(0,10);
@@ -20,7 +20,11 @@ state.cash=Number.isFinite(Number(state.cash))?Number(state.cash):100000;
 state.initialCash=Number.isFinite(Number(state.initialCash))?Number(state.initialCash):state.cash;
 const save=()=>localStorage.setItem("invest-sim",JSON.stringify(state));
 const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),3600)};
-const api=()=>new DataAPI(state.settings);
+const buttonText=b=>b?.dataset.originalText||b?.textContent||"";
+function setButtonBusy(b,busy,label="处理中…"){if(!b)return;if(busy){if(!b.dataset.originalText)b.dataset.originalText=buttonText(b);b.disabled=true;b.classList.add("is-busy");b.setAttribute("aria-busy","true");if(label)b.textContent=label}else{b.disabled=false;b.classList.remove("is-busy");b.removeAttribute("aria-busy");if(b.dataset.originalText){b.textContent=b.dataset.originalText;delete b.dataset.originalText}}}
+function flashButton(b,ok=true){if(!b)return;b.classList.remove("is-success","is-error");void b.offsetWidth;b.classList.add(ok?"is-success":"is-error");setTimeout(()=>b.classList.remove("is-success","is-error"),900)}
+document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b||b.disabled)return;b.classList.add("is-pressed");setTimeout(()=>b.classList.remove("is-pressed"),180)},true);
+document.addEventListener("submit",e=>{const b=e.submitter;if(!b)return;setButtonBusy(b,true,"处理中…");clearTimeout(b.__busyTimer);b.__busyTimer=setTimeout(()=>setButtonBusy(b,false),30000)},true);const api=()=>new DataAPI(state.settings);
 const quoteCacheKey=s=>String(s||"").trim().toUpperCase();
 const cachedQuote=s=>{try{return JSON.parse(localStorage.getItem("invest-quote:"+quoteCacheKey(s))||"null")}catch{return null}};
 const rememberQuote=(s,q)=>{try{localStorage.setItem("invest-quote:"+quoteCacheKey(s),JSON.stringify({...q,cachedAt:Date.now()}))}catch{}};
@@ -116,13 +120,18 @@ function klineSVG(bars,{type="daily"}={}){
 function bindKlineInteraction(root,bars,type="daily"){
   if(!root)return;
   const data=normalizeKlineBars(bars).slice(-600),tooltip=root.querySelector(".kline-tooltip"),svg=root.querySelector(".kline-svg");
-  if(!svg||!tooltip)return;
+  if(!svg||!tooltip||!data.length)return;
+  const crossV=document.createElementNS("http://www.w3.org/2000/svg","line"),crossH=document.createElementNS("http://www.w3.org/2000/svg","line");
+  crossV.setAttribute("class","kline-crosshair-v");crossH.setAttribute("class","kline-crosshair-h");crossV.style.pointerEvents="none";crossH.style.pointerEvents="none";svg.insertBefore(crossV,svg.firstChild);svg.insertBefore(crossH,svg.firstChild);
   const show=index=>{
     const i=Math.max(0,Math.min(data.length-1,Number(index)||0)),b=data[i],prev=data[i-1];
     tooltip.innerHTML=klinePointHTML(b,prev,type);
     tooltip.hidden=false;
     const area=svg.querySelector('[data-kline-index="'+i+'"]');
-    if(area){const ar=area.getBoundingClientRect(),rr=root.getBoundingClientRect();tooltip.style.left=Math.max(4,Math.min(rr.width-tooltip.offsetWidth-4,ar.left-rr.left+ar.width/2-tooltip.offsetWidth/2))+"px";tooltip.style.top=Math.max(4,ar.top-rr.top-tooltip.offsetHeight-8)+"px"}
+    if(area){
+      const xx=area.x.baseVal.value+area.width.baseVal.value/2,highs=data.map(x=>x.high),lows=data.map(x=>x.low),hi=Math.max(...highs),lo=Math.min(...lows),span=hi-lo||1,yy=18+(hi-b.close)/span*(430-18-42);
+      crossV.setAttribute("x1",xx);crossV.setAttribute("x2",xx);crossV.setAttribute("y1","18");crossV.setAttribute("y2","388");
+      crossH.setAttribute("x1","58");crossH.setAttribute("x2","1082");crossH.setAttribute("y1",yy);crossH.setAttribute("y2",yy);const ar=area.getBoundingClientRect(),rr=root.getBoundingClientRect();tooltip.style.left=Math.max(4,Math.min(rr.width-tooltip.offsetWidth-4,ar.left-rr.left+ar.width/2-tooltip.offsetWidth/2))+"px";tooltip.style.top=Math.max(4,ar.top-rr.top-tooltip.offsetHeight-8)+"px"}
   };
   root.querySelectorAll(".kline-hit").forEach(el=>{
     el.addEventListener("pointermove",()=>show(el.dataset.klineIndex));
