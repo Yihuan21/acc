@@ -210,3 +210,17 @@ main{min-width:0}
 .automation-kline-inline .kline-chart,.automation-kline-inline .kline-interactive{width:100%;max-width:100%;display:block}
 .automation-kline-inline{overflow:hidden}
 .strategy-trades,.strategy-signals-panel{overflow:hidden}
+
+
+.field-hint{display:block;margin-top:5px;font-size:11px;color:#8190b5;line-height:1.35}
+.kline-trade-marker{font-weight:800}
+.kline-trade-marker circle{stroke-width:2}
+.kline-trade-marker line{stroke-width:2}
+.kline-trade-marker text{font-size:11px;font-weight:900;letter-spacing:.6px}
+.kline-trade-marker.buy circle{fill:#38d996;stroke:#0b3d2a}
+.kline-trade-marker.buy line,.kline-trade-marker.buy text{stroke:#38d996;fill:#38d996}
+.kline-trade-marker.sell circle{fill:#ff5f7d;stroke:#4c1825}
+.kline-trade-marker.sell line,.kline-trade-marker.sell text{stroke:#ff5f7d;fill:#ff5f7d}
+.risk-status{margin-top:12px;padding:11px 13px;border-radius:12px;font-size:13px;font-weight:700}
+.risk-status.safe{color:#55d99a;background:#10251e;border:1px solid #26734f}
+.risk-status.triggered{color:#ff8498;background:#28121a;border:1px solid #713142}
