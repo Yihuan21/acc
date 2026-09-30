@@ -1,4 +1,4 @@
-const CACHE_VERSION = "investment-lab-v26";
+const CACHE_VERSION = "investment-lab-v27";
 const ASSETS = [
   "./",
   "./index.html",
