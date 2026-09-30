@@ -6,7 +6,7 @@ const ASSETS = [
   "./app.js",
   "./data.js",
   "./backtest.js",
-  "./simulation.js",
+  "./simulation.js","./strategy-engine.js",
   "./manifest.webmanifest"
 ];
 
