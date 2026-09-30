@@ -113,10 +113,13 @@ export function executeSimulationTrade(sim,{side,qty,price,date,feeRate=0.0005,s
   if(aShare&&side==="buy")quantity=Math.floor(quantity/lot)*lot;
   if(aShare&&side==="sell")quantity=Math.floor(quantity/lot)*lot;
   if(quantity<=0)throw new Error("A股买入数量需满足最小交易单位");
+  if(side!=="buy"&&side!=="sell")throw new Error("交易方向无效");
   if(side==="sell"){
-    const sellable=sim.position.lots.filter(x=>String(x.buyDate)<tradeDate).reduce((sum,x)=>sum+Number(x.qty||0),0);
+    const sellable=aShare
+      ? sim.position.lots.filter(x=>String(x.buyDate)<tradeDate).reduce((sum,x)=>sum+Number(x.qty||0),0)
+      : sim.position.lots.reduce((sum,x)=>sum+Number(x.qty||0),0);
     if(quantity>sim.position.qty)throw new Error("持仓不足");
-    if(quantity>sellable)throw new Error("A股实行T+1，当前还有今日买入的持仓不可卖出");
+    if(quantity>sellable)throw new Error(aShare?"A股实行T+1，当前还有今日买入的持仓不可卖出":"可卖持仓不足");
   }
   const gross=executionPrice*quantity;
   const fee=gross*Math.max(0,Number(feeRate)||0)+(aShare&&side==="sell"?gross*Math.max(0,Number(stampDutyRate)||0):0);
