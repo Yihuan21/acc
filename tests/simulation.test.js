@@ -85,3 +85,14 @@ test("timeline may move after a trade but never before the latest trade date",()
   jumpSimulationToDate(sim,"2020-01-01");
   assert.equal(sim.currentIndex,0);
 });
+
+test("A-share T+1 tracks each purchase lot instead of only the last buy date",()=>{
+  const sim=createSimulation({symbol:"600000",assetType:"stock",capital:100000,bars});
+  executeSimulationTrade(sim,{side:"buy",qty:100,price:10,date:"2020-01-02",feeRate:0});
+  stepSimulation(sim,1);
+  executeSimulationTrade(sim,{side:"buy",qty:100,price:11,date:"2020-01-03",feeRate:0});
+  stepSimulation(sim,1);
+  assert.throws(()=>executeSimulationTrade(sim,{side:"sell",qty:200,price:12,date:"2020-01-06",feeRate:0}),/T\+1|可卖数量/);
+  executeSimulationTrade(sim,{side:"sell",qty:100,price:12,date:"2020-01-06",feeRate:0});
+  assert.equal(sim.position.qty,100);
+});
