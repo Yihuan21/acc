@@ -2,6 +2,7 @@ import {DataAPI} from "./data.js?v=20260930-09";
 import {runBacktest} from "./backtest.js?v=20260930-13";
 import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-13";
 import {diagnoseRSIReversal} from "./rsi-diagnostic.js?v=20261001-01";
+import {requestAIStrategy,evaluateAIWalkForward} from "./ai-strategy.js?v=20261001-01";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-13";
 const __bootError=(e)=>{console.error(e);try{const t=document.querySelector("#toast");if(t){t.textContent="交互模块加载异常，请刷新页面";t.classList.add("show")}}catch{}};
 window.addEventListener("error",e=>__bootError(e));
@@ -244,6 +245,45 @@ async function runAutomatedInvestment(){
     toast("自动投资策略运行完成");
   }catch(e){$("#autoResult").textContent="自动策略运行失败："+friendlyError(e);toast("自动策略运行失败："+friendlyError(e))}finally{setButtonBusy(btn,false)}
 }
+
+async function runAIStrategyAssistant(){
+  const raw=$("#aiSymbol").value.trim(),t=assetType($("#aiType").value),a=$("#aiStart").value,b=$("#aiEnd").value;
+  const trainPct=Math.min(85,Math.max(50,Number($("#aiTrainPct").value)||70));
+  const capital=Math.max(1,Number($("#aiCapital").value)||100000);
+  const btn=$("#aiRunBtn");
+  if(!raw||!a||!b||a>=b)return toast("请填写正确的 AI 策略区间");
+  setButtonBusy(btn,true,"AI正在研究训练区间…");
+  try{
+    const bars=await history(sym(raw,t),a,b,t);
+    if(bars.length<100)throw Error("历史数据不足，建议至少 100 个交易日");
+    const split=Math.max(60,Math.min(bars.length-20,Math.floor(bars.length*trainPct/100)));
+    const trainingBars=bars.slice(0,split);
+    const testBars=bars.slice(split);
+    const ai=await requestAIStrategy(state.settings.apiBase,{
+      symbol:sym(raw,t),assetType:t,asOfDate:trainingBars.at(-1).date,
+      trainingBars:trainingBars.slice(-Math.min(1200,trainingBars.length))
+    });
+    const cfg=ai.strategy||{};
+    const r=evaluateAIWalkForward(bars,cfg,{capital,feeRate:.0005,slippage:.0005,startIndex:split});
+    const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
+    const markers=r.trades.map(x=>({side:x.side,date:x.date,price:x.price}));
+    const testKline=klineSVG(testBars,{type:"daily",showVolume:true,showMA:true,trades:markers});
+    const params=[
+      ["策略族",strategyLabel(r.config.strategy)],["仓位",((r.config.position||0)*100).toFixed(0)+"%"],
+      ["风险上限",((r.config.maxDrawdown||0)*100).toFixed(0)+"%"],
+      ["测试交易日",String(r.testBars)],["实际交易",String(r.trades.length)],
+      ["样本外收益",r.returnPct.toFixed(2)+"%"],["最大回撤",r.maxDrawdownPct.toFixed(2)+"%"]
+    ].map(x=>'<div><small>'+x[0]+'</small><b>'+esc(x[1])+'</b></div>').join("");
+    const rows=r.trades.slice().reverse().slice(0,50).map(x=>'<div class="row strategy-trade-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"AI买入":"AI卖出")+'</b><small>'+esc(x.date)+' · '+num(x.price)+' · '+num(x.qty)+'</small></span><span>'+esc(x.reason)+'</span></div>').join("")||'<div class="empty">样本外没有产生交易</div>';
+    $("#aiResult").classList.remove("empty");
+    $("#aiResult").innerHTML='<div class="ai-summary">'+params+'</div><div class="risk-status safe">✓ 信息隔离有效：DeepSeek 只接收 '+esc(trainingBars[0].date)+' → '+esc(trainingBars.at(-1).date)+' 的训练数据；样本外 '+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+' 没有发送给 AI。</div><div class="panel ai-reason"><b>AI策略说明</b><p>'+esc(cfg.reason||"AI未提供文字说明")+'</p><small>'+esc((cfg.risks||"未提供风险说明"))+'</small></div><div class="automation-kline-inline"><div class="panel-title"><b>样本外策略 K 线</b><span class="muted">'+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+' · BUY/SELL 为实际回放成交</span></div>'+testKline+'</div><div class="strategy-trades"><div class="panel-title"><b>AI交易记录</b><span class="muted">仅使用样本外历史</span></div><div class="strategy-plan">'+rows+'</div></div><p class="muted">AI 的任务是寻找策略，不直接决定未来某一天的价格。测试阶段由本地引擎逐日推进：第 T 天只读取 T-1 及以前的数据，在 T 天开盘执行；风险上限达到后停止建仓。</p>';
+    bindKlineInteraction($("#aiResult .kline-interactive"),testBars,"daily");
+    toast("AI策略研究完成");
+  }catch(e){
+    console.error(e);$("#aiResult").classList.remove("empty");$("#aiResult").textContent="AI策略研究失败："+friendlyError(e);toast("AI策略研究失败："+friendlyError(e));
+  }finally{setButtonBusy(btn,false)}
+}
+$("#aiRunBtn")?.addEventListener("click",runAIStrategyAssistant);
 
 async function runRSIDiagnostic(){
   const raw=$("#rsiDiagSymbol").value.trim()||$("#btSymbol").value.trim(),t=assetType($("#rsiDiagType").value),a=$("#rsiDiagStart").value||$("#btStart").value,b=$("#rsiDiagEnd").value||$("#btEnd").value;
