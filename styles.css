@@ -239,3 +239,10 @@ main{min-width:0}
 .rsi-diag-row{background:#101a30!important}
 .rsi-diag-row>span:last-child{text-align:right}
 @media(max-width:767px){.rsi-score-grid{grid-template-columns:1fr 1fr}.rsi-score-main{grid-column:1/-1}.rsi-side-grid{grid-template-columns:1fr}}
+
+/* AI strategy assistant */
+.ai-assistant-card{border-color:#8c7dff33;background:linear-gradient(145deg,#171b38,#0e162a)}
+.ai-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+.ai-summary>div{padding:13px;border-radius:13px;background:#0d1528;border:1px solid #ffffff09}
+.ai-summary small{display:block;color:#8794b0}.ai-summary b{display:block;margin-top:5px;font-size:18px}.ai-reason{margin-top:12px}
+@media(max-width:767px){.ai-summary{grid-template-columns:1fr 1fr}}
