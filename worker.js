@@ -96,13 +96,13 @@ async function proxyDeepSeek(request) {
   try { body = await request.json(); } catch { return json({ error: "请求 JSON 无效" }, 400); }
   const bars = Array.isArray(body?.trainingBars) ? body.trainingBars : [];
   const asOf = String(body?.asOfDate || "");
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(asOf)) return json({ error: "缺少有效 asOfDate" }, 400);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return json({ error: "缺少有效 asOfDate" }, 400);
   if (!bars.length || bars.length > 1600) return json({ error: "trainingBars 数量必须为 1-1600" }, 400);
   const clean = bars.map(x => ({
     date: String(x?.date || "").slice(0,10),
     open: Number(x?.open), high: Number(x?.high), low: Number(x?.low),
     close: Number(x?.close), volume: Number(x?.volume || 0)
-  })).filter(x => /^\\d{4}-\\d{2}-\\d{2}$/.test(x.date) && Number.isFinite(x.close));
+  })).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.date) && Number.isFinite(x.close));
   if (!clean.length || clean.some(x => x.date > asOf)) {
     return json({ error: "数据越界：AI 收到了 asOfDate 之后的数据" }, 400);
   }
@@ -178,7 +178,11 @@ export default {
     const u = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method === "HEAD") return new Response(null, { status: 200, headers: cors });
-    if (u.pathname === "/api/assistant") {\n      if (request.method !== "POST") return json({ error: "method not allowed" }, 405);\n      return proxyDeepSeek(request);\n    }\n    if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
+    if (u.pathname === "/api/assistant") {
+      if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+      return proxyDeepSeek(request);
+    }
+    if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
 
     if (u.pathname === "/api/health") {
       const deep = u.searchParams.get("deep") === "1";
