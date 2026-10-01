@@ -122,6 +122,6 @@ export function evaluateAIWalkForward(bars,raw,{capital=100000,feeRate=.0005,sli
   const last=Number(bars.at(-1)?.close)||0;
   const final=cash+qty*last;
   const ret=capital?final/capital-1:0;
-  const maxDD=curve.reduce((m,p)=>{m.peak=Math.max(m.peak,p.value);m.max=Math.max(m.max,m.peak?p.peak&&1-p.value/m.peak:0);return m},{peak:capital,max:0}).max;
+  let ddPeak=capital,maxDD=0; for(const p of curve){ddPeak=Math.max(ddPeak,p.value); if(ddPeak>0)maxDD=Math.max(maxDD,1-p.value/ddPeak);}
   return {config:cfg,splitDate:bars[split]?.date||null,final,returnPct:ret*100,maxDrawdownPct:maxDD*100,trades,curve,testBars:bars.length-split,leakageGuard:{aiSawThrough:split,aiDidNotReceiveAfterSplit:true,executionUsesNextOpen:true}};
 }
