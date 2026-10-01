@@ -115,17 +115,32 @@ function klineSVG(bars,{type="daily",showVolume=true,showMA=true,trades=[]}={}){
   const grid=[0,.25,.5,.75,1].map(t=>{const yy=pt+t*chartH,val=hi-t*span;return '<line class="kline-grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+yy+'" y2="'+yy+'"/><text class="kline-axis" x="4" y="'+(yy+4)+'">'+num(val)+'</text>'}).join("");
   const candles=data.map((b,i)=>{const xx=x(i),yyO=y(b.open),yyC=y(b.close),yyH=y(b.high),yyL=y(b.low),up=b.close>=b.open,cls=up?"kline-up":"kline-down",top=Math.min(yyO,yyC),height=Math.max(1,Math.abs(yyC-yyO));return '<line class="'+cls+'" x1="'+xx+'" x2="'+xx+'" y1="'+yyH+'" y2="'+yyL+'"/><rect class="'+cls+'" x="'+(xx-body/2)+'" y="'+top+'" width="'+body+'" height="'+height+'"/>'}).join("");
   const maPath=(n,cls)=>{const vals=maValues(data,n),pts=vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);return pts.length>1?'<polyline class="'+cls+'" points="'+pts.map(p=>p.join(",")).join(" ")+'"/>':""};
-  const volumes=showVolume?data.map((b,i)=>{const xx=x(i),maxV=Math.max(...data.map(z=>Number(z.volume)||0),1),vh=(Number(b.volume)||0)/maxV*volumeH;return '<rect class="kline-volume '+(b.close>=b.open?"kline-up":"kline-down")+'" x="'+(xx-body/2)+'" y="'+(pt+chartH+gap+volumeH-vh)+'" width="'+body+'" height="'+Math.max(1,vh)+'"/>'}).join(""):"";
+  const maxV=Math.max(...data.map(z=>Number(z.volume)||0),1);
+  const volumes=showVolume?data.map((b,i)=>{const xx=x(i),vh=(Number(b.volume)||0)/maxV*volumeH;return '<rect class="kline-volume '+(b.close>=b.open?"kline-up":"kline-down")+'" x="'+(xx-body/2)+'" y="'+(pt+chartH+gap+volumeH-vh)+'" width="'+body+'" height="'+Math.max(1,vh)+'"/>'}).join(""):"";
   const volumeLine=showVolume?'<line class="kline-grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+(pt+chartH+gap)+'" y2="'+(pt+chartH+gap)+'"/>':"";
   const labels=[0,Math.floor(data.length/3),Math.floor(data.length*2/3),data.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>'<text class="kline-axis" text-anchor="middle" x="'+x(i)+'" y="'+(H-12)+'">'+escapeHTML(type==="intraday"?data[i].time:data[i].date)+'</text>').join("");
   const tradeMarkers=(trades||[]).map(t=>({t,i:data.findIndex(b=>b.date===t.date)})).filter(x=>x.i>=0).map(({t,i})=>{const xx=x(i),isBuy=t.side==="buy",yy=Math.max(pt+12,Math.min(pt+chartH-4,y(Number(t.price)||data[i].close)+(isBuy?18:-18)));return '<g class="kline-trade-marker '+(isBuy?"buy":"sell")+'" pointer-events="none"><line x1="'+xx+'" x2="'+xx+'" y1="'+(isBuy?yy-8:yy+8)+'" y2="'+(isBuy?yy+(isBuy?2:-2):yy-2)+'"/><circle cx="'+xx+'" cy="'+yy+'" r="6"/><text x="'+xx+'" y="'+(isBuy?yy+22:yy-12)+'" text-anchor="middle">'+(isBuy?"BUY":"SELL")+'</text></g>'}).join("");
   const hitAreas=data.map((b,i)=>'<rect class="kline-hit" data-kline-index="'+i+'" x="'+(x(i)-Math.max(step/2,8))+'" y="'+pt+'" width="'+Math.max(step,16)+'" height="'+(chartH+gap+volumeH)+'" fill="transparent"/>').join("");
-  return '<div class="kline-interactive" data-kline-type="'+type+'"><div class="kline-scroll"><svg class="kline-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+(type==="intraday"?"分时K线":"日K线")+'">'+grid+candles+(type==="daily"&&showMA?maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60"):"")+volumeLine+volumes+tradeMarkers+labels+hitAreas+'</svg></div><div class="kline-tooltip" hidden></div><div class="kline-legend"><span>'+ (type==="intraday"?"5分钟K · 当日":"日K · 每个交易日") +'</span>'+(type==="daily"&&showMA?'<span>MA5</span><span>MA20</span><span>MA60</span>':"")+(showVolume?'<span>成交量</span>':"")+'<span>移动/点按图表查看精确坐标</span></div></div>';
+  return '<div class="kline-interactive" data-kline-type="'+type+'" data-kline-zoom="1"><div class="kline-toolbar"><span class="kline-zoom-label">缩放</span><button type="button" class="kline-zoom-btn" data-kline-zoom-action="out" aria-label="缩小K线">−</button><input class="kline-zoom-range" type="range" min="1" max="4" step=".25" value="1" aria-label="K线缩放"><button type="button" class="kline-zoom-btn" data-kline-zoom-action="in" aria-label="放大K线">＋</button><button type="button" class="kline-zoom-reset" data-kline-zoom-action="reset">复原</button><span class="kline-zoom-value">100%</span></div><div class="kline-scroll"><svg class="kline-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+(type==="intraday"?"分时K线":"日K线")+'">'+grid+candles+(type==="daily"&&showMA?maPath(5,"kline-ma5")+maPath(20,"kline-ma20")+maPath(60,"kline-ma60"):"")+volumeLine+volumes+tradeMarkers+labels+hitAreas+'</svg></div><div class="kline-tooltip" hidden></div><div class="kline-legend"><span>'+ (type==="intraday"?"5分钟K · 当日":"日K · 每个交易日") +'</span>'+(type==="daily"&&showMA?'<span>MA5</span><span>MA20</span><span>MA60</span>':"")+(showVolume?'<span>成交量</span>':"")+'<span>点按/拖动查看精确坐标</span></div></div>';
 }
 function bindKlineInteraction(root,bars,type="daily"){
   if(!root)return;
   const data=normalizeKlineBars(bars).slice(-600),tooltip=root.querySelector(".kline-tooltip"),svg=root.querySelector(".kline-svg");
   if(!svg||!tooltip||!data.length)return;
+  const scroll=root.querySelector(".kline-scroll"),range=root.querySelector(".kline-zoom-range"),value=root.querySelector(".kline-zoom-value");
+  const setZoom=z=>{
+    const zoom=Math.max(1,Math.min(4,Number(z)||1));
+    root.dataset.klineZoom=String(zoom);
+    if(range)range.value=String(zoom);
+    if(value)value.textContent=Math.round(zoom*100)+"%";
+    if(svg){svg.style.width=(zoom*100)+"%";svg.style.minWidth=(zoom*100)+"%";}
+  };
+  root.querySelectorAll("[data-kline-zoom-action]").forEach(btn=>btn.addEventListener("click",()=>{
+    const action=btn.dataset.klineZoomAction,current=Number(range?.value||1);
+    setZoom(action==="in"?current+.25:action==="out"?current-.25:1);
+  }));
+  range?.addEventListener("input",e=>setZoom(e.target.value));
+  setZoom(1);
   const crossV=document.createElementNS("http://www.w3.org/2000/svg","line"),crossH=document.createElementNS("http://www.w3.org/2000/svg","line");
   crossV.setAttribute("class","kline-crosshair-v");crossH.setAttribute("class","kline-crosshair-h");crossV.style.pointerEvents="none";crossH.style.pointerEvents="none";svg.insertBefore(crossV,svg.firstChild);svg.insertBefore(crossH,svg.firstChild);
   const show=index=>{
