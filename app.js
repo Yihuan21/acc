@@ -267,7 +267,7 @@ $("#settingsForm").onsubmit=async e=>{e.preventDefault();state.settings.apiBase=
   }catch(x){
     toast("设置已保存；数据接口暂不可用，可稍后重试或手动输入成交价");
   }};
-$("#apiBase").value=state.settings.apiBase||BUILTIN_API;$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-40);$("#btStart").value=iso(start);$("#btEnd").value=end;const simStart=new Date("2020-01-01T00:00:00");$("#simStart").value=iso(simStart);$("#simEnd").value=end;render();
+$("#apiBase").value=state.settings.apiBase||BUILTIN_API;$("#usdCny").value=state.settings.usdCny;$("#initialCash").value=state.initialCash;const today=new Date(),end=iso(today),start=new Date(today);start.setFullYear(start.getFullYear()-40);$("#btStart").value=iso(start);$("#btEnd").value=end;$("#rsiDiagStart").value=iso(start);$("#rsiDiagEnd").value=end;$("#rsiDiagSymbol").value=$("#btSymbol")?.value||"AAPL";const simStart=new Date("2020-01-01T00:00:00");$("#simStart").value=iso(simStart);$("#simEnd").value=end;render();
 document.documentElement.classList.add("app-ready");
 if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{});
 
