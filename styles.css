@@ -224,3 +224,18 @@ main{min-width:0}
 .risk-status{margin-top:12px;padding:11px 13px;border-radius:12px;font-size:13px;font-weight:700}
 .risk-status.safe{color:#55d99a;background:#10251e;border:1px solid #26734f}
 .risk-status.triggered{color:#ff8498;background:#28121a;border:1px solid #713142}
+
+/* RSI reversal diagnostic */
+.rsi-diagnostic-card{border-color:#7d8cff33;background:linear-gradient(145deg,#151f39,#0e162a)}
+.rsi-score-grid{display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:10px;margin-top:12px}
+.rsi-score-grid>div{padding:14px;border-radius:14px;background:#0d1528;border:1px solid #ffffff09}
+.rsi-score-grid small,.rsi-side-grid small{display:block;color:#8794b0}
+.rsi-score-grid b{display:block;margin-top:5px;font-size:19px}
+.rsi-score-main b{display:inline-block;font-size:42px;line-height:1}
+.rsi-score-main span{color:#8794b0;margin-left:4px}
+.rsi-side-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.rsi-side-grid>div{padding:12px;border-radius:13px;background:#0d1528;border:1px solid #ffffff09}
+.rsi-side-grid b{display:block;margin-top:5px}
+.rsi-diag-row{background:#101a30!important}
+.rsi-diag-row>span:last-child{text-align:right}
+@media(max-width:767px){.rsi-score-grid{grid-template-columns:1fr 1fr}.rsi-score-main{grid-column:1/-1}.rsi-side-grid{grid-template-columns:1fr}}
