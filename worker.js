@@ -2,7 +2,7 @@
 // Deployment marker: 2026-09-29 — credentials-ready redeploy
 const cors = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,HEAD,OPTIONS",
+  "access-control-allow-methods": "GET,HEAD,POST,OPTIONS",
   "access-control-allow-headers": "Content-Type,Accept",
   "access-control-max-age": "86400",
   "vary": "Origin"
