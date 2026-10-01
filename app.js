@@ -1,6 +1,7 @@
 import {DataAPI} from "./data.js?v=20260930-09";
 import {runBacktest} from "./backtest.js?v=20260930-13";
 import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-13";
+import {diagnoseRSIReversal} from "./rsi-diagnostic.js?v=20261001-01";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-13";
 const __bootError=(e)=>{console.error(e);try{const t=document.querySelector("#toast");if(t){t.textContent="交互模块加载异常，请刷新页面";t.classList.add("show")}}catch{}};
 window.addEventListener("error",e=>__bootError(e));
@@ -228,6 +229,27 @@ async function runAutomatedInvestment(){
     toast("自动投资策略运行完成");
   }catch(e){$("#autoResult").textContent="自动策略运行失败："+friendlyError(e);toast("自动策略运行失败："+friendlyError(e))}finally{setButtonBusy(btn,false)}
 }
+
+async function runRSIDiagnostic(){
+  const raw=$("#rsiDiagSymbol").value.trim()||$("#btSymbol").value.trim(),t=assetType($("#rsiDiagType").value),a=$("#rsiDiagStart").value||$("#btStart").value,b=$("#rsiDiagEnd").value||$("#btEnd").value;
+  const btn=$("#rsiDiagBtn");
+  if(!raw||!a||!b)return toast("请先填写 RSI 诊断的标的和时间区间");
+  setButtonBusy(btn,true,"正在诊断拐点…");
+  try{
+    const bars=await history(sym(raw,t),a,b,t);
+    const r=diagnoseRSIReversal(bars,{period:Number($("#rsiDiagPeriod").value)||14,oversold:Number($("#rsiDiagOversold").value)||30,overbought:Number($("#rsiDiagOverbought").value)||70,lookahead:Number($("#rsiDiagLookahead").value)||10,targetPct:(Number($("#rsiDiagTarget").value)||2)/100});
+    const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
+    const markers=r.signals.map(x=>({side:x.side,date:x.date,price:bars[x.index]?.close||0}));
+    const markerKline=klineSVG(bars,{type:"daily",showVolume:true,showMA:true,trades:markers});
+    const rows=r.signals.slice().reverse().slice(0,60).map(x=>'<div class="row rsi-diag-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"看涨反转":"看跌反转")+'</b><small>'+esc(x.date)+' · RSI '+x.rsi.toFixed(1)+' · 真实拐点 '+esc(x.actualDate)+'</small></span><span><b>'+x.score.toFixed(0)+'分</b><small>后续有利幅度 '+x.favorableMove.toFixed(2)+'%</small></span></div>').join("")||'<div class="empty">没有检测到符合条件的 RSI 反转</div>';
+    $("#rsiDiagResult").classList.remove("empty");
+    $("#rsiDiagResult").innerHTML='<div class="rsi-score-grid"><div class="rsi-score-main"><small>RSI 拐点诊断分</small><b>'+r.score.toFixed(0)+'</b><span>/ 100</span></div><div><small>信号命中率</small><b>'+r.hitRate.toFixed(1)+'%</b></div><div><small>信号数量</small><b>'+r.sampleSize+'</b></div><div><small>区间</small><b>'+esc(r.startDate)+' → '+esc(r.endDate)+'</b></div></div><div class="risk-status '+(r.score>=50?"safe":"triggered")+'">'+esc(r.verdict)+'</div><div class="rsi-side-grid"><div><small>看涨反转</small><b>'+r.buy.count+' 次 · 命中 '+r.buy.hitRate.toFixed(1)+'% · 平均 '+r.buy.avgScore.toFixed(0)+' 分</b></div><div><small>看跌反转</small><b>'+r.sell.count+' 次 · 命中 '+r.sell.hitRate.toFixed(1)+'% · 平均 '+r.sell.avgScore.toFixed(0)+' 分</b></div></div><div class="automation-kline-inline"><div class="panel-title"><b>RSI 反转位置</b><span class="muted">BUY/SELL 为诊断信号，不是实际成交</span></div>'+markerKline+'</div><div class="strategy-signals-panel"><div class="panel-title"><b>逐次诊断</b><span class="muted">真实拐点由事后 ±8 个交易日窗口定位</span></div><div class="strategy-plan">'+rows+'</div></div><p class="muted">诊断分由“方向命中”和“距真实拐点的时间距离”共同计算；未来数据只用于事后评估，不参与生成 RSI 信号。样本少于 8 次时会降低总分可信度。</p>';
+    bindKlineInteraction($("#rsiDiagResult .kline-interactive"),bars,"daily");
+    toast("RSI 反转诊断完成");
+  }catch(e){$("#rsiDiagResult").textContent="RSI诊断失败："+friendlyError(e);toast("RSI诊断失败："+friendlyError(e))}
+  finally{setButtonBusy(btn,false)}
+}
+$("#rsiDiagBtn").onclick=runRSIDiagnostic;
 $("#autoRunBtn").onclick=runAutomatedInvestment;
 $("#showVolume")?.addEventListener("change",()=>{const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(raw)loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m").catch(e=>toast(friendlyError(e)))});
 $("#showMA")?.addEventListener("change",()=>{const raw=$("#symbolInput").value.trim(),t=assetType($("#marketType").value);if(raw)loadKline(raw,t,$("#klineRange .chip.active")?.dataset.range||"3m").catch(e=>toast(friendlyError(e)))});
