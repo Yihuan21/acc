@@ -2,7 +2,7 @@ import {DataAPI} from "./data.js?v=20260930-09";
 import {runBacktest} from "./backtest.js?v=20260930-13";
 import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-13";
 import {diagnoseRSIReversal} from "./rsi-diagnostic.js?v=20261001-01";
-import {requestAIStrategy,evaluateAIWalkForward} from "./ai-strategy.js?v=20261003-02";
+import {requestAIStrategy,evaluateAIWalkForward,optimizeAIStrategy} from "./ai-strategy.js?v=20261003-02";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-13";
 const __bootError=(e)=>{console.error(e);try{const t=document.querySelector("#toast");if(t){t.textContent="交互模块加载异常，请刷新页面";t.classList.add("show")}}catch{}};
 window.addEventListener("error",e=>__bootError(e));
@@ -262,12 +262,33 @@ async function runAIStrategyAssistant(){
     if(bars.length<100)throw Error("历史数据不足，建议至少 100 个交易日");
     const split=Math.max(60,Math.min(bars.length-20,Math.floor(bars.length*trainPct/100)));
     const trainingBars=bars.slice(0,split),testBars=bars.slice(split);
-    aiPhase="AI分析训练数据";
+    aiPhase="优化训练算法";
+    const optimization=optimizeAIStrategy(trainingBars,{capital,feeRate:.0005,slippage:.0005});
+    if(!optimization.ok)throw Error(optimization.reason||"训练数据不足，无法优化策略");
+    aiPhase="AI分析优化结果";
     const ai=await requestAIStrategy(state.settings.apiBase,{
       symbol:sym(raw,t),assetType:t,asOfDate:trainingBars.at(-1).date,
-      trainingBars:trainingBars.slice(-Math.min(1200,trainingBars.length))
+      trainingBars:trainingBars.slice(-Math.min(1200,trainingBars.length)),
+      optimization:{
+        tested:optimization.tested,
+        validationRange:optimization.validationRange,
+        candidates:optimization.top.map((x,index)=>({
+          id:index+1,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,
+          rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,
+          momentumLookback:x.config.momentumLookback,momentumThreshold:x.config.momentumThreshold,
+          trendThreshold:x.config.trendThreshold,dcaDays:x.config.dcaDays,
+          position:x.config.position,maxDrawdown:x.config.maxDrawdown,
+          score:Number(x.score.toFixed(4)),returnPct:Number(x.returnPct.toFixed(4)),
+          excessReturnPct:Number(x.excessReturnPct.toFixed(4)),maxDrawdownPct:Number(x.maxDrawdownPct.toFixed(4)),
+          trades:x.trades,winRatePct:Number(x.winRatePct.toFixed(2))
+        }))
+      }
     });
-    const cfg=ai.strategy||{};
+    const requested=ai.strategy||{};
+    const chosenId=Number(requested.candidateId);
+    const chosen=optimization.top[chosenId-1]||optimization.top[0];
+    if(!chosen)throw Error("优化器没有找到可验证的策略候选");
+    const cfg={...chosen.config,reason:requested.reason||"",risks:requested.risks||"",candidateId:chosenId||1};
     aiPhase="执行样本外回测";
     const r=evaluateAIWalkForward(bars,cfg,{capital,feeRate:.0005,slippage:.0005,startIndex:split});
     const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
