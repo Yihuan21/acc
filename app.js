@@ -268,36 +268,43 @@ async function runAIStrategyAssistant(){
     aiPhase="鲁棒性验证";
     const robustness=robustifyAIStrategy(trainingBars,optimization,{capital,feeRate:.0005,slippage:.0005});
     if(!robustness.ok||!robustness.best)throw Error(robustness.reason||"鲁棒性验证未找到稳定候选");
-    aiPhase="AI分析优化结果";
+    const optimizationPayload={
+      tested:optimization.tested,
+      validationRange:optimization.validationRange,
+      robustness:{
+        folds:robustness.folds,
+        candidates:robustness.top.map((x,index)=>({id:index+1,robustScore:Number(x.robustScore.toFixed(4)),medianReturnPct:Number(x.medianReturnPct.toFixed(4)),worstFoldReturnPct:Number(x.worstFoldReturnPct.toFixed(4)),returnStdPct:Number(x.returnStdPct.toFixed(4)),medianDrawdownPct:Number(x.medianDrawdownPct.toFixed(4)),stressMinReturnPct:Number(x.stressMinReturnPct.toFixed(4)),stable:x.stable,neighbors:x.neighbors,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,momentumLookback:x.config.momentumLookback,momentumThreshold:x.config.momentumThreshold,trendThreshold:x.config.trendThreshold,dcaDays:x.config.dcaDays,position:x.config.position,maxDrawdown:x.config.maxDrawdown}))
+      },
+      candidates:optimization.top.map((x,index)=>({
+        id:index+1,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,
+        rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,
+        momentumLookback:x.config.momentumLookback,momentumThreshold:x.config.momentumThreshold,
+        trendThreshold:x.config.trendThreshold,dcaDays:x.config.dcaDays,
+        position:x.config.position,maxDrawdown:x.config.maxDrawdown,
+        score:Number(x.score.toFixed(4)),returnPct:Number(x.returnPct.toFixed(4)),
+        excessReturnPct:Number(x.excessReturnPct.toFixed(4)),maxDrawdownPct:Number(x.maxDrawdownPct.toFixed(4)),
+        trades:x.trades,winRatePct:Number(x.winRatePct.toFixed(2))
+      }))
+    };
+    const stableCandidates=robustness.top.filter(x=>x.stable);
+    const retryMode=!stableCandidates.length;
+    aiPhase=retryMode?"鲁棒性未通过，强制重新搜索策略":"AI分析优化结果";
     const ai=await requestAIStrategy(state.settings.apiBase,{
       symbol:sym(raw,t),assetType:t,asOfDate:trainingBars.at(-1).date,
       trainingBars:trainingBars.slice(-Math.min(1200,trainingBars.length)),
-      optimization:{
-        tested:optimization.tested,
-        validationRange:optimization.validationRange,
-        robustness:{
-          folds:robustness.folds,
-          candidates:robustness.top.map((x,index)=>({id:index+1,robustScore:Number(x.robustScore.toFixed(4)),medianReturnPct:Number(x.medianReturnPct.toFixed(4)),worstFoldReturnPct:Number(x.worstFoldReturnPct.toFixed(4)),returnStdPct:Number(x.returnStdPct.toFixed(4)),medianDrawdownPct:Number(x.medianDrawdownPct.toFixed(4)),stressMinReturnPct:Number(x.stressMinReturnPct.toFixed(4)),stable:x.stable,neighbors:x.neighbors,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,momentumLookback:x.config.momentumLookback,momentumThreshold:x.config.momentumThreshold,trendThreshold:x.config.trendThreshold,dcaDays:x.config.dcaDays,position:x.config.position,maxDrawdown:x.config.maxDrawdown}))
-        },
-        candidates:optimization.top.map((x,index)=>({
-          id:index+1,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,
-          rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,
-          momentumLookback:x.config.momentumLookback,momentumThreshold:x.config.momentumThreshold,
-          trendThreshold:x.config.trendThreshold,dcaDays:x.config.dcaDays,
-          position:x.config.position,maxDrawdown:x.config.maxDrawdown,
-          score:Number(x.score.toFixed(4)),returnPct:Number(x.returnPct.toFixed(4)),
-          excessReturnPct:Number(x.excessReturnPct.toFixed(4)),maxDrawdownPct:Number(x.maxDrawdownPct.toFixed(4)),
-          trades:x.trades,winRatePct:Number(x.winRatePct.toFixed(2))
-        }))
-      }
+      selectionMode:retryMode?"retry_after_robust_failure":"normal",
+      excludedCandidateIds:retryMode?[1]:[],
+      optimization:optimizationPayload
     });
     const requested=ai.strategy||{};
     const requestedId=Number(requested.candidateId);
-    const stableCandidates=robustness.top.filter(x=>x.stable);
-    if(!stableCandidates.length)throw Error("鲁棒性验证没有找到通过稳定性门槛的策略，已拒绝进入样本外测试");
     const requestedRobust=robustness.top[requestedId-1];
-    const chosenRobust=requestedRobust?.stable?requestedRobust:stableCandidates[0];
-    const cfg={...chosenRobust.config,reason:requested.reason||"",risks:requested.risks||"",candidateId:robustness.top.indexOf(chosenRobust)+1};
+    const retryPool=robustness.top.filter((x,i)=>i!==0);
+    const chosenRobust=retryMode
+      ? (requestedRobust&&requestedId!==1?requestedRobust:(retryPool[0]||robustness.best))
+      : (requestedRobust?.stable?requestedRobust:stableCandidates[0]);
+    if(!chosenRobust)throw Error("重新搜索后仍没有可执行候选策略");
+    const cfg={...chosenRobust.config,reason:requested.reason||"",risks:requested.risks||"",candidateId:robustness.top.indexOf(chosenRobust)+1,retryMode};
     aiPhase="执行样本外回测";
     const r=evaluateAIWalkForward(bars,cfg,{capital,feeRate:.0005,slippage:.0005,startIndex:split});
     const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
