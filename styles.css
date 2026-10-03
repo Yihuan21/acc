@@ -246,3 +246,34 @@ main{min-width:0}
 .ai-summary>div{padding:13px;border-radius:13px;background:#0d1528;border:1px solid #ffffff09}
 .ai-summary small{display:block;color:#8794b0}.ai-summary b{display:block;margin-top:5px;font-size:18px}.ai-reason{margin-top:12px}
 @media(max-width:767px){.ai-summary{grid-template-columns:1fr 1fr}}
+
+/* AI strategy report */
+.ai-report-block{margin-top:14px;padding:15px;border-radius:16px;background:#0d1528;border:1px solid #ffffff0b}
+.ai-report-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.ai-report-title>b{font-size:16px}
+.ai-return-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.ai-return-grid>div,.ai-strategy-params>div,.ai-review-stats>div{padding:12px;border-radius:12px;background:#101a30;border:1px solid #ffffff08}
+.ai-return-grid small,.ai-strategy-params small,.ai-review-stats small{display:block;color:#8794b0;font-size:11px}
+.ai-return-grid b,.ai-strategy-params b,.ai-review-stats b{display:block;margin-top:5px;font-size:16px}
+.ai-strategy-params{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.ai-decision-list{display:flex;flex-direction:column;gap:7px}
+.ai-decision-row{background:#101a30!important;align-items:flex-start!important}
+.ai-decision-row>span:first-child{min-width:150px}
+.ai-decision-row>span:last-child{line-height:1.5;color:#c4cce0}
+.ai-review-list{display:flex;flex-direction:column;gap:8px}
+.ai-review-item{display:flex;gap:9px;padding:11px 12px;border-radius:12px;background:#101a30;color:#c4cce0;line-height:1.5}
+.ai-review-item>b{color:#9aa8ff}
+.ai-review-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:10px}
+.ai-review-stats b{font-size:15px}
+.ai-report-block .ai-reason{margin-top:10px}
+@media(max-width:900px){
+  .ai-return-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ai-strategy-params{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:699px){
+  .ai-return-grid{grid-template-columns:1fr 1fr}
+  .ai-strategy-params,.ai-review-stats{grid-template-columns:1fr 1fr}
+  .ai-decision-row{display:block!important}
+  .ai-decision-row>span{display:block}
+  .ai-decision-row>span:last-child{margin-top:7px}
+}
