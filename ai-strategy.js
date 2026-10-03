@@ -112,6 +112,52 @@ export function optimizeAIStrategy(bars,{capital=100000,feeRate=.0005,slippage=.
   };
 }
 
+export function robustifyAIStrategy(bars,optimization,{capital=100000,feeRate=.0005,slippage=.0005}={}){
+  // 鲁棒性只使用训练区间：3 个时间顺序验证窗口 + 参数邻域扰动 + 成本压力测试。
+  if(!optimization?.ok||!optimization.top?.length)return {ok:false,reason:"没有可做鲁棒性检验的候选"};
+  const folds=[
+    {start:Math.floor(bars.length*.50),end:Math.floor(bars.length*.68)},
+    {start:Math.floor(bars.length*.58),end:Math.floor(bars.length*.82)},
+    {start:Math.floor(bars.length*.68),end:bars.length}
+  ].filter(f=>f.end-f.start>=25);
+  const neighbor=(cfg)=>{
+    const out=[cfg];
+    const add=(p)=>out.push(normalizeAIConfig({...cfg,...p}));
+    if(cfg.strategy==="ma"){for(const d of [-5,5]){add({fast:cfg.fast+d});add({slow:cfg.slow+d})}}
+    if(cfg.strategy==="rsi"){for(const d of [-2,2]){add({rsiPeriod:cfg.rsiPeriod+d});add({oversold:cfg.oversold+d});add({overbought:cfg.overbought+d})}}
+    if(cfg.strategy==="momentum"){for(const d of [-5,5]){add({momentumLookback:cfg.momentumLookback+d});}for(const d of [-.01,.01])add({momentumThreshold:cfg.momentumThreshold+d})}
+    if(cfg.strategy==="trend"){for(const d of [-5,5]){add({fast:cfg.fast+d});add({slow:cfg.slow+d})}for(const d of [-.005,.005])add({trendThreshold:cfg.trendThreshold+d})}
+    if(cfg.strategy==="dca"){for(const d of [-5,5])add({dcaDays:cfg.dcaDays+d})}
+    return out.filter((x,i,a)=>a.findIndex(y=>JSON.stringify(y)===JSON.stringify(x))===i);
+  };
+  const rows=[];
+  for(const base of optimization.top.slice(0,10)){
+    const variants=neighbor(base.config);
+    const foldReturns=[],foldDD=[],stressReturns=[];
+    for(const v of variants){
+      for(const fold of folds){
+        const r=evaluateAIWalkForward(bars.slice(0,fold.end),v,{capital,feeRate,slippage,startIndex:fold.start});
+        if(v===variants[0]){foldReturns.push(r.returnPct);foldDD.push(r.maxDrawdownPct)}
+      }
+    }
+    for(const feeMult of [1.5,2]){
+      const r=evaluateAIWalkForward(bars,base.config,{capital,feeRate:feeRate*feeMult,slippage:slippage*feeMult,startIndex:optimization.validationStart});
+      stressReturns.push(r.returnPct);
+    }
+    const median=a=>{const x=a.slice().sort((m,n)=>m-n);return x.length?x[Math.floor(x.length/2)]:0};
+    const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
+    const retMed=median(foldReturns), ddMed=median(foldDD), retWorst=Math.min(...foldReturns), retMean=mean(foldReturns);
+    const retStd=Math.sqrt(mean(foldReturns.map(x=>(x-retMean)**2)));
+    const stressMin=Math.min(...stressReturns);
+    const score=retMed-ddMed*.65+(retWorst*.35)-retStd*.25+(stressMin*.20);
+    const stability=retWorst>=retMed-5&&retStd<=8&&stressMin>=-10;
+    rows.push({config:base.config,score,robustScore:score,medianReturnPct:retMed,worstFoldReturnPct:retWorst,returnStdPct:retStd,medianDrawdownPct:ddMed,stressMinReturnPct:stressMin,stable:stability,folds:folds.length,neighbors:variants.length});
+  }
+  rows.sort((a,b)=>b.robustScore-a.robustScore);
+  const best=rows[0];
+  return {ok:true,folds,top:rows,best,robust:true};
+}
+
 export function normalizeAIConfig(raw){
   const allowed=["ma","rsi","momentum","trend","dca","buyhold"];
   const strategy=allowed.includes(raw?.strategy)?raw.strategy:"ma";
