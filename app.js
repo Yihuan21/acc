@@ -2,7 +2,7 @@ import {DataAPI} from "./data.js?v=20260930-09";
 import {runBacktest} from "./backtest.js?v=20260930-13";
 import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-13";
 import {diagnoseRSIReversal} from "./rsi-diagnostic.js?v=20261001-01";
-import {requestAIStrategy,evaluateAIWalkForward,optimizeAIStrategy} from "./ai-strategy.js?v=20261003-02";
+import {requestAIStrategy,evaluateAIWalkForward,optimizeAIStrategy} from "./ai-strategy.js?v=20261003-03";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-13";
 const __bootError=(e)=>{console.error(e);try{const t=document.querySelector("#toast");if(t){t.textContent="交互模块加载异常，请刷新页面";t.classList.add("show")}}catch{}};
 window.addEventListener("error",e=>__bootError(e));
