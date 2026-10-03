@@ -2,7 +2,7 @@ import {DataAPI} from "./data.js?v=20260930-09";
 import {runBacktest} from "./backtest.js?v=20260930-13";
 import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-13";
 import {diagnoseRSIReversal} from "./rsi-diagnostic.js?v=20261001-01";
-import {requestAIStrategy,evaluateAIWalkForward,optimizeAIStrategy} from "./ai-strategy.js?v=20261003-03";
+import {requestAIStrategy,evaluateAIWalkForward,optimizeAIStrategy,robustifyAIStrategy} from "./ai-strategy.js?v=20261003-04";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-13";
 const __bootError=(e)=>{console.error(e);try{const t=document.querySelector("#toast");if(t){t.textContent="交互模块加载异常，请刷新页面";t.classList.add("show")}}catch{}};
 window.addEventListener("error",e=>__bootError(e));
@@ -265,6 +265,9 @@ async function runAIStrategyAssistant(){
     aiPhase="优化训练算法";
     const optimization=optimizeAIStrategy(trainingBars,{capital,feeRate:.0005,slippage:.0005});
     if(!optimization.ok)throw Error(optimization.reason||"训练数据不足，无法优化策略");
+    aiPhase="鲁棒性验证";
+    const robustness=robustifyAIStrategy(trainingBars,optimization,{capital,feeRate:.0005,slippage:.0005});
+    if(!robustness.ok||!robustness.best)throw Error(robustness.reason||"鲁棒性验证未找到稳定候选");
     aiPhase="AI分析优化结果";
     const ai=await requestAIStrategy(state.settings.apiBase,{
       symbol:sym(raw,t),assetType:t,asOfDate:trainingBars.at(-1).date,
@@ -272,6 +275,10 @@ async function runAIStrategyAssistant(){
       optimization:{
         tested:optimization.tested,
         validationRange:optimization.validationRange,
+        robustness:{
+          folds:robustness.folds,
+          candidates:robustness.top.map((x,index)=>({id:index+1,robustScore:Number(x.robustScore.toFixed(4)),medianReturnPct:Number(x.medianReturnPct.toFixed(4)),worstFoldReturnPct:Number(x.worstFoldReturnPct.toFixed(4)),returnStdPct:Number(x.returnStdPct.toFixed(4)),medianDrawdownPct:Number(x.medianDrawdownPct.toFixed(4)),stressMinReturnPct:Number(x.stressMinReturnPct.toFixed(4)),stable:x.stable,neighbors:x.neighbors,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,momentumLookback:x.config.momentumLookback,momentumThreshold:x.config.momentumThreshold,trendThreshold:x.config.trendThreshold,dcaDays:x.config.dcaDays,position:x.config.position,maxDrawdown:x.config.maxDrawdown}))
+        },
         candidates:optimization.top.map((x,index)=>({
           id:index+1,strategy:x.config.strategy,fast:x.config.fast,slow:x.config.slow,
           rsiPeriod:x.config.rsiPeriod,oversold:x.config.oversold,overbought:x.config.overbought,
@@ -285,10 +292,11 @@ async function runAIStrategyAssistant(){
       }
     });
     const requested=ai.strategy||{};
-    const chosenId=Number(requested.candidateId);
-    const chosen=optimization.top[chosenId-1]||optimization.top[0];
-    if(!chosen)throw Error("优化器没有找到可验证的策略候选");
-    const cfg={...chosen.config,reason:requested.reason||"",risks:requested.risks||"",candidateId:chosenId||1};
+    const requestedId=Number(requested.candidateId);
+    const requestedRobust=robustness.top[requestedId-1]||robustness.best;
+    const chosenRobust=requestedRobust?.stable?requestedRobust:robustness.best;
+    if(!chosenRobust)throw Error("鲁棒性验证没有找到稳定策略候选");
+    const cfg={...chosenRobust.config,reason:requested.reason||"",risks:requested.risks||"",candidateId:robustness.top.indexOf(chosenRobust)+1};
     aiPhase="执行样本外回测";
     const r=evaluateAIWalkForward(bars,cfg,{capital,feeRate:.0005,slippage:.0005,startIndex:split});
     const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
@@ -339,7 +347,7 @@ async function runAIStrategyAssistant(){
     $("#aiResult").classList.remove("empty");
     $("#aiResult").innerHTML=
       '<section class="ai-report-block"><div class="ai-report-title"><b>① 投资回报</b><span class="muted">严格样本外结果</span></div><div class="ai-return-grid">'+summary+'</div>'+riskReview+'</section>'+
-      '<section class="ai-report-block"><div class="ai-report-title"><b>② AI具体策略</b><span class="strategy-badge">'+esc(strategyLabel(r.config.strategy))+'</span></div><div class="ai-strategy-params">'+strategyParams.join("")+'</div><div class="panel ai-reason"><b>先优化，再决策</b><p>训练区间先测试 '+optimization.tested+' 组策略参数，并用训练区间内部的验证段筛选前 10 个候选；AI 最终选择候选 #'+String(cfg.candidateId||1)+'，随后锁定参数进入真正样本外回测。</p><p><b>为什么选择这套策略</b><br>'+esc(cfg.reason||"AI未提供策略选择理由")+'</p><small>风险提示：'+esc(cfg.risks||"AI未提供额外风险说明")+'</small></div></section>'+
+      '<section class="ai-report-block"><div class="ai-report-title"><b>② AI具体策略</b><span class="strategy-badge">'+esc(strategyLabel(r.config.strategy))+'</span></div><div class="ai-strategy-params">'+strategyParams.join("")+'</div><div class="panel ai-reason"><b>先优化，再决策</b><p>先测试 '+optimization.tested+' 组参数，再用训练区间的 3 个时间窗口、参数邻域和手续费/滑点压力测试做鲁棒筛选；只有稳定候选才允许进入真正样本外回测。当前锁定候选 #'+String(cfg.candidateId||1)+'。</p><p><b>鲁棒性结果</b><br>最差验证窗口 '+chosenRobust.worstFoldReturnPct.toFixed(2)+'%，收益波动 '+chosenRobust.returnStdPct.toFixed(2)+'%，成本压力测试最低收益 '+chosenRobust.stressMinReturnPct.toFixed(2)+'%，参数邻域 '+chosenRobust.neighbors+' 组；'+(chosenRobust.stable?"通过稳定性门槛。":"原候选未通过，已回退到鲁棒性最高的稳定候选。")+'</p><p><b>为什么选择这套策略</b><br>'+esc(cfg.reason||"AI未提供策略选择理由")+'</p><small>风险提示：'+esc(cfg.risks||"AI未提供额外风险说明")+'</small></div></section>'+
       '<section class="ai-report-block"><div class="ai-report-title"><b>③ 每次决策为什么发生</b><span class="muted">决策只读取交易日前的数据</span></div><div class="ai-decision-list">'+decisionRows+'</div></section>'+
       '<section class="ai-report-block"><div class="ai-report-title"><b>④ 样本外 K 线与实际成交</b><span class="muted">BUY / SELL 是回测实际执行点</span></div>'+testKline+'<div class="strategy-plan">'+tradeRows+'</div></section>'+
       '<section class="ai-report-block"><div class="ai-report-title"><b>⑤ 回测复盘</b><span class="muted">回测结束后由本地引擎生成</span></div><div class="ai-review-list">'+reviewRows+'</div><div class="ai-review-stats"><div><small>最好单笔</small><b class="positive">'+(r.closedTrades?r.bestTradeReturnPct.toFixed(2)+"%":"—")+'</b></div><div><small>最差单笔</small><b class="negative">'+(r.closedTrades?r.worstTradeReturnPct.toFixed(2)+"%":"—")+'</b></div><div><small>测试区间</small><b>'+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+'</b></div><div><small>训练 / 测试</small><b>'+trainingBars.length+' / '+testBars.length+' 日</b></div></div></section>'+
