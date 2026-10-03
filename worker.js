@@ -203,7 +203,7 @@ export default {
           "https://api.fund.eastmoney.com/f10/lsjz?fundCode=000001&pageIndex=1&pageSize=1",
           EASTMONEY_HEADERS
         );
-        result.upstreams = {
+        result.deepseek = { configured: Boolean(request.env?.DEEPSEEK_API_KEY) };\n        result.upstreams = {
           yahoo: { ok: yahoo.ok, status: yahoo.status },
           eastmoney: { ok: fund.ok, status: fund.status }
         };
