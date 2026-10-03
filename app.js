@@ -259,8 +259,7 @@ async function runAIStrategyAssistant(){
     const bars=await history(sym(raw,t),a,b,t);
     if(bars.length<100)throw Error("历史数据不足，建议至少 100 个交易日");
     const split=Math.max(60,Math.min(bars.length-20,Math.floor(bars.length*trainPct/100)));
-    const trainingBars=bars.slice(0,split);
-    const testBars=bars.slice(split);
+    const trainingBars=bars.slice(0,split),testBars=bars.slice(split);
     const ai=await requestAIStrategy(state.settings.apiBase,{
       symbol:sym(raw,t),assetType:t,asOfDate:trainingBars.at(-1).date,
       trainingBars:trainingBars.slice(-Math.min(1200,trainingBars.length))
@@ -270,17 +269,57 @@ async function runAIStrategyAssistant(){
     const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
     const markers=r.trades.map(x=>({side:x.side,date:x.date,price:x.price}));
     const testKline=klineSVG(testBars,{type:"daily",showVolume:true,showMA:true,trades:markers});
-    const params=[
-      ["策略族",strategyLabel(r.config.strategy)],["仓位",((r.config.position||0)*100).toFixed(0)+"%"],
-      ["风险上限",((r.config.maxDrawdown||0)*100).toFixed(0)+"%"],
-      ["测试交易日",String(r.testBars)],["实际交易",String(r.trades.length)],
-      ["样本外收益",r.returnPct.toFixed(2)+"%"],["最大回撤",r.maxDrawdownPct.toFixed(2)+"%"]
-    ].map(x=>'<div><small>'+x[0]+'</small><b>'+esc(x[1])+'</b></div>').join("");
-    const rows=r.trades.slice().reverse().slice(0,50).map(x=>'<div class="row strategy-trade-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"AI买入":"AI卖出")+'</b><small>'+esc(x.date)+' · '+num(x.price)+' · '+num(x.qty)+'</small></span><span>'+esc(x.reason)+'</span></div>').join("")||'<div class="empty">样本外没有产生交易</div>';
+
+    const strategyParams=[];
+    const pushParam=(k,v)=>strategyParams.push('<div><small>'+esc(k)+'</small><b>'+esc(String(v))+'</b></div>');
+    pushParam("策略类型",strategyLabel(r.config.strategy));
+    if(r.config.strategy==="ma")pushParam("均线参数",r.config.fast+" / "+r.config.slow+" 日");
+    if(r.config.strategy==="rsi")pushParam("RSI参数",r.config.rsiPeriod+"日 · "+r.config.oversold+" / "+r.config.overbought);
+    if(r.config.strategy==="momentum")pushParam("动量参数",r.config.momentumLookback+"日 · "+(r.config.momentumThreshold*100).toFixed(2)+"%");
+    if(r.config.strategy==="trend")pushParam("趋势参数",r.config.fast+" / "+r.config.slow+"日 · 阈值 "+(r.config.trendThreshold*100).toFixed(2)+"%");
+    if(r.config.strategy==="dca")pushParam("定投周期",r.config.dcaDays+"个交易日");
+    if(r.config.strategy==="buyhold")pushParam("执行方式","样本外起点买入并持有");
+    pushParam("单次仓位",(r.config.position*100).toFixed(0)+"%");
+    pushParam("风险上限",(r.config.maxDrawdown*100).toFixed(0)+"%");
+
+    const returnClass=r.returnPct>=0?"positive":"negative";
+    const benchmarkClass=r.benchmarkReturnPct>=0?"positive":"negative";
+    const summary=[
+      ["期末资产",money(r.final,currency)], ["净赚 / 亏损",money(r.profit,currency),returnClass],
+      ["AI样本外收益",r.returnPct.toFixed(2)+"%",returnClass],
+      ["买入并持有基准",r.benchmarkReturnPct.toFixed(2)+"%",benchmarkClass],
+      ["相对基准",(r.excessReturnPct>=0?"+":"")+r.excessReturnPct.toFixed(2)+"个百分点",r.excessReturnPct>=0?"positive":"negative"],
+      ["最大回撤",r.maxDrawdownPct.toFixed(2)+"%","negative"],
+      ["已完成交易",r.closedTrades+" 笔"], ["交易胜率",r.closedTrades?r.winRatePct.toFixed(1)+"%":"—"],
+      ["平均单笔已实现",r.closedTrades?r.avgTradeReturnPct.toFixed(2)+"%":"—"], ["资金暴露",r.exposurePct.toFixed(1)+"%"]
+    ].map(x=>'<div><small>'+x[0]+'</small><b class="'+(x[2]||"")+'">'+esc(x[1])+'</b></div>').join("");
+
+    const tradeRows=r.trades.slice().reverse().slice(0,60).map(x=>{
+      const ret=x.side==="sell"&&Number.isFinite(x.tradeReturnPct)?'<em class="'+(x.tradeReturnPct>=0?"positive":"negative")+'">单笔 '+x.tradeReturnPct.toFixed(2)+'%</em>':"";
+      return '<div class="row strategy-trade-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"AI买入":"AI卖出")+'</b><small>'+esc(x.date)+' · 成交 '+num(x.price)+' · 数量 '+num(x.qty)+' · '+esc(x.reason)+'</small></span><span>'+ret+'</span></div>';
+    }).join("")||'<div class="empty">样本外没有实际成交。</div>';
+
+    const decisionRows=r.decisions.filter(x=>x.signal!=="hold"||x.riskHalt).slice(-60).reverse().map(x=>{
+      const label=x.riskHalt?"风控暂停":(x.signal==="buy"?"买入决策":"卖出决策");
+      const cls=x.riskHalt?"negative":(x.signal==="buy"?"positive":"negative");
+      return '<div class="row ai-decision-row"><span><b class="'+cls+'">'+label+'</b><small>'+esc(x.date)+' · 参考价 '+num(x.price)+'</small></span><span>'+esc(x.reason)+'</span></div>';
+    }).join("")||'<div class="empty">样本外没有触发明确的买卖决策。</div>';
+
+    const reviewRows=r.review.map((x,i)=>'<div class="ai-review-item"><b>'+(i+1)+'.</b><span>'+esc(x)+'</span></div>').join("");
+    const riskReview=(r.riskTriggered
+      ? '<div class="risk-status triggered">⚠ 样本外期间触发了风险控制：达到 '+(r.config.maxDrawdown*100).toFixed(0)+'% 回撤上限后停止继续建仓。</div>'
+      : '<div class="risk-status safe">✓ 样本外期间没有触发 '+(r.config.maxDrawdown*100).toFixed(0)+'% 的回撤风控上限。</div>');
+
     $("#aiResult").classList.remove("empty");
-    $("#aiResult").innerHTML='<div class="ai-summary">'+params+'</div><div class="risk-status safe">✓ 信息隔离有效：DeepSeek 只接收 '+esc(trainingBars[0].date)+' → '+esc(trainingBars.at(-1).date)+' 的训练数据；样本外 '+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+' 没有发送给 AI。</div><div class="panel ai-reason"><b>AI策略说明</b><p>'+esc(cfg.reason||"AI未提供文字说明")+'</p><small>'+esc((cfg.risks||"未提供风险说明"))+'</small></div><div class="automation-kline-inline"><div class="panel-title"><b>样本外策略 K 线</b><span class="muted">'+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+' · BUY/SELL 为实际回放成交</span></div>'+testKline+'</div><div class="strategy-trades"><div class="panel-title"><b>AI交易记录</b><span class="muted">仅使用样本外历史</span></div><div class="strategy-plan">'+rows+'</div></div><p class="muted">AI 的任务是寻找策略，不直接决定未来某一天的价格。测试阶段由本地引擎逐日推进：第 T 天只读取 T-1 及以前的数据，在 T 天开盘执行；风险上限达到后停止建仓。</p>';
+    $("#aiResult").innerHTML=
+      '<section class="ai-report-block"><div class="ai-report-title"><b>① 投资回报</b><span class="muted">严格样本外结果</span></div><div class="ai-return-grid">'+summary+'</div>'+riskReview+'</section>'+
+      '<section class="ai-report-block"><div class="ai-report-title"><b>② AI具体策略</b><span class="strategy-badge">'+esc(strategyLabel(r.config.strategy))+'</span></div><div class="ai-strategy-params">'+strategyParams.join("")+'</div><div class="panel ai-reason"><b>为什么选择这套策略</b><p>'+esc(cfg.reason||"AI未提供策略选择理由")+'</p><small>风险提示：'+esc(cfg.risks||"AI未提供额外风险说明")+'</small></div></section>'+
+      '<section class="ai-report-block"><div class="ai-report-title"><b>③ 每次决策为什么发生</b><span class="muted">决策只读取交易日前的数据</span></div><div class="ai-decision-list">'+decisionRows+'</div></section>'+
+      '<section class="ai-report-block"><div class="ai-report-title"><b>④ 样本外 K 线与实际成交</b><span class="muted">BUY / SELL 是回测实际执行点</span></div>'+testKline+'<div class="strategy-plan">'+tradeRows+'</div></section>'+
+      '<section class="ai-report-block"><div class="ai-report-title"><b>⑤ 回测复盘</b><span class="muted">回测结束后由本地引擎生成</span></div><div class="ai-review-list">'+reviewRows+'</div><div class="ai-review-stats"><div><small>最好单笔</small><b class="positive">'+(r.closedTrades?r.bestTradeReturnPct.toFixed(2)+"%":"—")+'</b></div><div><small>最差单笔</small><b class="negative">'+(r.closedTrades?r.worstTradeReturnPct.toFixed(2)+"%":"—")+'</b></div><div><small>测试区间</small><b>'+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+'</b></div><div><small>训练 / 测试</small><b>'+trainingBars.length+' / '+testBars.length+' 日</b></div></div></section>'+
+      '<div class="risk-status safe">✓ 信息隔离：DeepSeek 只接收训练区间 '+esc(trainingBars[0].date)+' → '+esc(trainingBars.at(-1).date)+'；测试区间 '+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+' 没有发送给 AI。复盘使用的是测试结束后的本地历史结果，不会反向参与策略选择。</div>';
     bindKlineInteraction($("#aiResult .kline-interactive"),testBars,"daily");
-    toast("AI策略研究完成");
+    toast("AI策略研究、回报分析和复盘完成");
   }catch(e){
     console.error(e);$("#aiResult").classList.remove("empty");$("#aiResult").textContent="AI策略研究失败："+friendlyError(e);toast("AI策略研究失败："+friendlyError(e));
   }finally{setButtonBusy(btn,false)}
