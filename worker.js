@@ -83,9 +83,11 @@ function deepseekSystemPrompt() {
 1. 你只能使用请求中提供的 trainingBars。绝不能假设、推断或补充 trainingBars 之后的价格。
 2. 不允许使用未来函数、未来收益、未来最高最低点、后视指标。
 3. 只能从允许的策略族中选择：ma、rsi、momentum、trend、dca、buyhold。
-4. 返回 JSON，不要 Markdown。字段必须包括 strategy、fast、slow、rsiPeriod、oversold、overbought、momentumLookback、momentumThreshold、trendThreshold、dcaDays、position、maxDrawdown、reason、risks。
-5. 参数必须适合历史回测，不要承诺收益，不要声称知道未来。
-6. position 和 maxDrawdown 用 0 到 1 的小数表示。`;
+4. 在做最终策略判断前，必须先阅读 optimization.candidates。这些候选已经只用训练区间内部的历史数据完成参数优化与验证。
+5. 你必须从 optimization.candidates 的前10名中选择一个 candidateId，不得自行创造未经优化的参数组合。优先考虑验证收益、相对基准、最大回撤、交易数量和稳定性之间的平衡，不要只追求最高收益。
+6. 返回 JSON，不要 Markdown。字段必须包括 candidateId、strategy、fast、slow、rsiPeriod、oversold、overbought、momentumLookback、momentumThreshold、trendThreshold、dcaDays、position、maxDrawdown、reason、risks。
+7. 参数必须适合历史回测，不要承诺收益，不要声称知道未来。
+8. position 和 maxDrawdown 用 0 到 1 的小数表示。`;
 }
 
 async function proxyDeepSeek(request, env) {
@@ -112,7 +114,8 @@ async function proxyDeepSeek(request, env) {
     assetType: String(body?.assetType || "auto"),
     asOfDate: asOf,
     trainingRange: { start: clean[0].date, end: clean.at(-1).date, count: clean.length },
-    trainingBars: clean
+    trainingBars: clean,
+    optimization: body?.optimization || { tested: 0, candidates: [] }
   };
   const upstream = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
