@@ -14,7 +14,7 @@ export async function requestAIStrategy(apiBase,payload){
   });
   let data=null;
   try{data=await response.json()}catch{throw Error("AI接口返回了无效数据")}
-  if(!response.ok||data?.error)throw Error(data?.error||("AI接口 HTTP "+response.status));
+  if(!response.ok||data?.error){const detail=data?.detail?("："+String(data.detail).slice(0,600)):"";throw Error((data?.error||("AI接口 HTTP "+response.status))+detail)}
   return data;
 }
 
