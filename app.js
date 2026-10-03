@@ -253,21 +253,26 @@ async function runAIStrategyAssistant(){
   const trainPct=Math.min(85,Math.max(50,Number($("#aiTrainPct").value)||70));
   const capital=Math.max(1,Number($("#aiCapital").value)||100000);
   const btn=$("#aiRunBtn");
+  let aiPhase="准备中";
   if(!raw||!a||!b||a>=b)return toast("请填写正确的 AI 策略区间");
   setButtonBusy(btn,true,"AI正在研究训练区间…");
   try{
+    aiPhase="读取历史行情";
     const bars=await history(sym(raw,t),a,b,t);
     if(bars.length<100)throw Error("历史数据不足，建议至少 100 个交易日");
     const split=Math.max(60,Math.min(bars.length-20,Math.floor(bars.length*trainPct/100)));
     const trainingBars=bars.slice(0,split),testBars=bars.slice(split);
+    aiPhase="AI分析训练数据";
     const ai=await requestAIStrategy(state.settings.apiBase,{
       symbol:sym(raw,t),assetType:t,asOfDate:trainingBars.at(-1).date,
       trainingBars:trainingBars.slice(-Math.min(1200,trainingBars.length))
     });
     const cfg=ai.strategy||{};
+    aiPhase="执行样本外回测";
     const r=evaluateAIWalkForward(bars,cfg,{capital,feeRate:.0005,slippage:.0005,startIndex:split});
     const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
     const markers=r.trades.map(x=>({side:x.side,date:x.date,price:x.price}));
+    aiPhase="生成AI投资报告";
     const testKline=klineSVG(testBars,{type:"daily",showVolume:true,showMA:true,trades:markers});
 
     const strategyParams=[];
@@ -299,13 +304,13 @@ async function runAIStrategyAssistant(){
       return '<div class="row strategy-trade-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"AI买入":"AI卖出")+'</b><small>'+esc(x.date)+' · 成交 '+num(x.price)+' · 数量 '+num(x.qty)+' · '+esc(x.reason)+'</small></span><span>'+ret+'</span></div>';
     }).join("")||'<div class="empty">样本外没有实际成交。</div>';
 
-    const decisionRows=r.decisions.filter(x=>x.signal!=="hold"||x.riskHalt).slice(-60).reverse().map(x=>{
+    const decisionRows=(r.decisions||[]).filter(x=>x.signal!=="hold"||x.riskHalt).slice(-60).reverse().map(x=>{
       const label=x.riskHalt?"风控暂停":(x.signal==="buy"?"买入决策":"卖出决策");
       const cls=x.riskHalt?"negative":(x.signal==="buy"?"positive":"negative");
       return '<div class="row ai-decision-row"><span><b class="'+cls+'">'+label+'</b><small>'+esc(x.date)+' · 参考价 '+num(x.price)+'</small></span><span>'+esc(x.reason)+'</span></div>';
     }).join("")||'<div class="empty">样本外没有触发明确的买卖决策。</div>';
 
-    const reviewRows=r.review.map((x,i)=>'<div class="ai-review-item"><b>'+(i+1)+'.</b><span>'+esc(x)+'</span></div>').join("");
+    const reviewRows=(r.review||[]).map((x,i)=>'<div class="ai-review-item"><b>'+(i+1)+'.</b><span>'+esc(x)+'</span></div>').join("");
     const riskReview=(r.riskTriggered
       ? '<div class="risk-status triggered">⚠ 样本外期间触发了风险控制：达到 '+(r.config.maxDrawdown*100).toFixed(0)+'% 回撤上限后停止继续建仓。</div>'
       : '<div class="risk-status safe">✓ 样本外期间没有触发 '+(r.config.maxDrawdown*100).toFixed(0)+'% 的回撤风控上限。</div>');
@@ -321,7 +326,13 @@ async function runAIStrategyAssistant(){
     bindKlineInteraction($("#aiResult .kline-interactive"),testBars,"daily");
     toast("AI策略研究、回报分析和复盘完成");
   }catch(e){
-    console.error(e);$("#aiResult").classList.remove("empty");$("#aiResult").textContent="AI策略研究失败："+friendlyError(e);toast("AI策略研究失败："+friendlyError(e));
+    console.error("AI策略助手失败",{phase:aiPhase,error:e});
+    const rawMessage=String(e?.message||e||"未知错误");
+    const message=/操作未完成/.test(rawMessage)?rawMessage:rawMessage;
+    $("#aiResult").classList.remove("empty");
+    $("#aiResult").innerHTML='<div class="risk-status triggered"><b>AI策略研究失败</b><br>发生阶段：'+esc(aiPhase)+'<br>'+esc(message)+'</div>';
+    toast("AI助手："+aiPhase+"失败");
+
   }finally{setButtonBusy(btn,false)}
 }
 $("#aiRunBtn")?.addEventListener("click",runAIStrategyAssistant);
