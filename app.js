@@ -15,6 +15,8 @@ const defaults={cash:100000,initialCash:100000,positions:{},trades:[],recent:[],
 let state;try{state=JSON.parse(localStorage.getItem("invest-sim")||"null")||structuredClone(defaults)}catch{state=structuredClone(defaults)}
 state.settings=state.settings&&typeof state.settings==="object"?state.settings:{};
 state.settings.apiBase=String(state.settings.apiBase||BUILTIN_API).trim().replace(/\/$/,"");
+const LEGACY_API="https://investment-simulator-api.yihuanchen219.workers.dev";
+if(state.settings.apiBase===LEGACY_API||/investment-simulator-api\.yihuanchen219\.workers\.dev/i.test(state.settings.apiBase))state.settings.apiBase=BUILTIN_API;
 state.settings.usdCny=Number(state.settings.usdCny)||7.2;
 state.positions=state.positions&&typeof state.positions==="object"?state.positions:{};
 state.trades=Array.isArray(state.trades)?state.trades:[];
