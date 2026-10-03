@@ -88,8 +88,8 @@ function deepseekSystemPrompt() {
 6. position 和 maxDrawdown 用 0 到 1 的小数表示。`;
 }
 
-async function proxyDeepSeek(request) {
-  if (!request.env?.DEEPSEEK_API_KEY) {
+async function proxyDeepSeek(request, env) {
+  if (!env?.DEEPSEEK_API_KEY) {
     return json({ error: "Cloudflare 尚未配置 DEEPSEEK_API_KEY" }, 503);
   }
   let body;
@@ -117,7 +117,7 @@ async function proxyDeepSeek(request) {
   const upstream = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": "Bearer " + request.env.DEEPSEEK_API_KEY,
+      "Authorization": "Bearer " + env.DEEPSEEK_API_KEY,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
@@ -174,13 +174,13 @@ async function proxyFund(params) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const u = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method === "HEAD") return new Response(null, { status: 200, headers: cors });
     if (u.pathname === "/api/assistant") {
       if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
-      return proxyDeepSeek(request);
+      return proxyDeepSeek(request, env);
     }
     if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
 
@@ -203,7 +203,7 @@ export default {
           "https://api.fund.eastmoney.com/f10/lsjz?fundCode=000001&pageIndex=1&pageSize=1",
           EASTMONEY_HEADERS
         );
-        result.deepseek = { configured: Boolean(request.env?.DEEPSEEK_API_KEY) };
+        result.deepseek = { configured: Boolean(env?.DEEPSEEK_API_KEY) };
         result.upstreams = {
           yahoo: { ok: yahoo.ok, status: yahoo.status },
           eastmoney: { ok: fund.ok, status: fund.status }
