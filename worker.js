@@ -188,8 +188,8 @@ export default {
       const deep = u.searchParams.get("deep") === "1";
       const result = {
         ok: true,
-        service: "investment-simulator-api",
-        worker: "investment-simulator-api",
+        service: "acc-api",
+        worker: "acc-api",
         version: "2026-09-30",
         time: new Date().toISOString(),
         endpoints: ["/api/health", "/api/yahoo", "/api/fund", "/api/assistant"]
@@ -203,7 +203,8 @@ export default {
           "https://api.fund.eastmoney.com/f10/lsjz?fundCode=000001&pageIndex=1&pageSize=1",
           EASTMONEY_HEADERS
         );
-        result.deepseek = { configured: Boolean(request.env?.DEEPSEEK_API_KEY) };\n        result.upstreams = {
+        result.deepseek = { configured: Boolean(request.env?.DEEPSEEK_API_KEY) };
+        result.upstreams = {
           yahoo: { ok: yahoo.ok, status: yahoo.status },
           eastmoney: { ok: fund.ok, status: fund.status }
         };
@@ -236,7 +237,7 @@ export default {
 
     return json({
       ok: true,
-      service: "investment-simulator-api",
+      service: "acc-api",
       endpoints: ["/api/health", "/api/yahoo", "/api/fund", "/api/assistant"]
     });
   }
