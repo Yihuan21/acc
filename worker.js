@@ -84,7 +84,7 @@ function deepseekSystemPrompt() {
 2. 不允许使用未来函数、未来收益、未来最高最低点、后视指标。
 3. 只能从允许的策略族中选择：ma、rsi、momentum、trend、dca、buyhold。
 4. 在做最终策略判断前，必须阅读 optimization.candidates 和 optimization.robustness.candidates。后者已经经过多个时间窗口、参数邻域扰动以及手续费和滑点压力测试。
-5. 你必须从 robustness.candidates 的前10名中选择 candidateId，不得自行创造未经鲁棒性验证的参数组合。优先考虑最差验证窗口、收益波动、压力测试结果、最大回撤和稳定性，不要只追求最高收益；优先选择 stable 为 true 的候选。
+5. 你必须从 robustness.candidates 的前10名中选择 candidateId，不得自行创造参数组合。正常模式优先选择 stable 为 true 的候选；如果 selectionMode=retry_after_robust_failure，说明全部候选都没有通过稳定性门槛，此时必须避开 excludedCandidateIds，重新选择另一候选继续样本外测试，并在 reason/risks 中明确说明这是鲁棒失败后的强制重选，不得伪称其已通过鲁棒门槛。
 6. 返回 JSON，不要 Markdown。字段必须包括 candidateId、strategy、fast、slow、rsiPeriod、oversold、overbought、momentumLookback、momentumThreshold、trendThreshold、dcaDays、position、maxDrawdown、reason、risks。
 7. 参数必须适合历史回测，不要承诺收益，不要声称知道未来。
 8. position 和 maxDrawdown 用 0 到 1 的小数表示。`;
