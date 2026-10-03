@@ -72,6 +72,46 @@ function decisionAt(bars,i,cfg){
 }
 function signalAt(bars,i,cfg){ return decisionAt(bars,i,cfg).signal; }
 
+
+export function optimizeAIStrategy(bars,{capital=100000,feeRate=.0005,slippage=.0005}={}){
+  // 只在“训练区间内部”做二次切分：前段用于参数选择，后段用于验证。
+  // 最终样本外区间完全不参与优化。
+  if(!Array.isArray(bars)||bars.length<120) return {ok:false,reason:"训练数据不足",candidates:[],tested:0};
+  const validationStart=Math.max(60,Math.floor(bars.length*.65));
+  const grid=[];
+  const add=(strategy,p)=>grid.push({strategy,...p,position:.7,maxDrawdown:.2});
+  for(const fast of [10,20,30])for(const slow of [50,80,120])if(fast<slow)add("ma",{fast,slow});
+  for(const period of [7,14,21])for(const oversold of [25,30,35])for(const overbought of [65,70,75])add("rsi",{rsiPeriod:period,oversold,overbought});
+  for(const lookback of [10,20,40,60])for(const threshold of [.03,.05,.08,.12])add("momentum",{momentumLookback:lookback,momentumThreshold:threshold});
+  for(const fast of [10,20,30])for(const slow of [50,80,120])for(const threshold of [.005,.01,.02])if(fast<slow)add("trend",{fast,slow,trendThreshold:threshold});
+  for(const dcaDays of [10,21,42])add("dca",{dcaDays});
+  add("buyhold",{});
+  const scored=[];
+  for(const raw of grid){
+    const r=evaluateAIWalkForward(bars,raw,{capital,feeRate,slippage,startIndex:validationStart});
+    const tradePenalty=Math.max(0,2-r.closedTrades)*1.5;
+    const score=r.returnPct-r.maxDrawdownPct*.65+r.excessReturnPct*.35-tradePenalty;
+    scored.push({
+      config:normalizeAIConfig(raw),
+      score,
+      returnPct:r.returnPct,
+      excessReturnPct:r.excessReturnPct,
+      maxDrawdownPct:r.maxDrawdownPct,
+      trades:r.closedTrades,
+      winRatePct:r.winRatePct
+    });
+  }
+  scored.sort((a,b)=>b.score-a.score);
+  const top=scored.slice(0,10);
+  return {
+    ok:true,
+    tested:grid.length,
+    validationStart,
+    validationRange:{start:bars[validationStart]?.date||null,end:bars.at(-1)?.date||null,count:bars.length-validationStart},
+    top
+  };
+}
+
 export function normalizeAIConfig(raw){
   const allowed=["ma","rsi","momentum","trend","dca","buyhold"];
   const strategy=allowed.includes(raw?.strategy)?raw.strategy:"ma";
