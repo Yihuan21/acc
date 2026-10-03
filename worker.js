@@ -115,6 +115,8 @@ async function proxyDeepSeek(request, env) {
     asOfDate: asOf,
     trainingRange: { start: clean[0].date, end: clean.at(-1).date, count: clean.length },
     trainingBars: clean,
+    selectionMode: String(body?.selectionMode || "normal"),
+    excludedCandidateIds: Array.isArray(body?.excludedCandidateIds) ? body.excludedCandidateIds.map(Number).filter(Number.isFinite) : [],
     optimization: body?.optimization || { tested: 0, candidates: [] }
   };
   const upstream = await fetch("https://api.deepseek.com/chat/completions", {
