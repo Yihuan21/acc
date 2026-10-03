@@ -293,9 +293,10 @@ async function runAIStrategyAssistant(){
     });
     const requested=ai.strategy||{};
     const requestedId=Number(requested.candidateId);
-    const requestedRobust=robustness.top[requestedId-1]||robustness.best;
-    const chosenRobust=requestedRobust?.stable?requestedRobust:robustness.best;
-    if(!chosenRobust)throw Error("鲁棒性验证没有找到稳定策略候选");
+    const stableCandidates=robustness.top.filter(x=>x.stable);
+    if(!stableCandidates.length)throw Error("鲁棒性验证没有找到通过稳定性门槛的策略，已拒绝进入样本外测试");
+    const requestedRobust=robustness.top[requestedId-1];
+    const chosenRobust=requestedRobust?.stable?requestedRobust:stableCandidates[0];
     const cfg={...chosenRobust.config,reason:requested.reason||"",risks:requested.risks||"",candidateId:robustness.top.indexOf(chosenRobust)+1};
     aiPhase="执行样本外回测";
     const r=evaluateAIWalkForward(bars,cfg,{capital,feeRate:.0005,slippage:.0005,startIndex:split});
