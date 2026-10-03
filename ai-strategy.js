@@ -72,44 +72,6 @@ function decisionAt(bars,i,cfg){
 }
 function signalAt(bars,i,cfg){ return decisionAt(bars,i,cfg).signal; }
 
-  // i 是“要执行交易的当天”，所有指标最多读取 i-1。
-  if(i<1)return "hold";
-  const s=String(cfg.strategy||"ma");
-  if(s==="buyhold")return i===1?"buy":"hold";
-  if(s==="dca")return ((i-cfg.startIndex)%Math.max(5,cfg.dcaDays||21)===0)?"buy":"hold";
-  if(s==="ma"){
-    const f=sma(bars,i-1,cfg.fast),sl=sma(bars,i-1,cfg.slow);
-    const pf=sma(bars,i-2,cfg.fast),ps=sma(bars,i-2,cfg.slow);
-    if([f,sl,pf,ps].some(x=>x==null))return "hold";
-    if(pf<=ps&&f>sl)return "buy";
-    if(pf>=ps&&f<sl)return "sell";
-    return "hold";
-  }
-  if(s==="rsi"){
-    const v=rsi(bars,i-1,cfg.rsiPeriod);
-    if(v==null)return "hold";
-    if(v<=cfg.oversold)return "buy";
-    if(v>=cfg.overbought)return "sell";
-    return "hold";
-  }
-  if(s==="momentum"){
-    const m=momentum(bars,i-1,cfg.momentumLookback);
-    if(m==null)return "hold";
-    if(m>=cfg.momentumThreshold)return "buy";
-    if(m<=-cfg.momentumThreshold)return "sell";
-    return "hold";
-  }
-  if(s==="trend"){
-    const f=sma(bars,i-1,cfg.fast),sl=sma(bars,i-1,cfg.slow);
-    if(f==null||sl==null)return "hold";
-    const spread=(f-sl)/(Number(bars[i-1].close)||1);
-    if(spread>=cfg.trendThreshold)return "buy";
-    if(spread<=-cfg.trendThreshold)return "sell";
-    return "hold";
-  }
-  return "hold";
-}
-
 export function normalizeAIConfig(raw){
   const allowed=["ma","rsi","momentum","trend","dca","buyhold"];
   const strategy=allowed.includes(raw?.strategy)?raw.strategy:"ma";
