@@ -87,6 +87,12 @@
 
 目前仍未完整模拟 A 股涨跌停、停牌、成交量冲击、分红现金流和全部拆股/配股等公司行为；A 股最小交易单位、卖出印花税、手续费、滑点等基础参数已经进入回测引擎，但不同券商的实际费率仍可能不同，因此回测结果不能视为真实可成交结果。
 
+## AI API：可选 ADHD 友好模式
+
+Cloudflare Worker 新增独立的 `POST /api/chat`，通过 `adhdMode: true/false` 控制是否加载 `i-have-adhd` 仓库中的原始 `SKILL.md`。未传该字段时默认关闭。原有 `POST /api/assistant` 投资策略接口保持不变，避免破坏策略 JSON 输出。
+
+部署和请求示例见 [ADHD_API.md](./ADHD_API.md)。通用聊天接口需要配置 `ADHD_CHAT_API_KEY` Secret；不要把该令牌放进 GitHub Pages 前端代码。
+
 ## 部署
 
 直接开启 GitHub Pages 即可运行前端。若浏览器环境限制跨域，可部署 Cloudflare Worker 作为数据代理，并在“设置 → API 代理地址”填写 Worker 地址。
