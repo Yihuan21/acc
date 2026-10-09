@@ -3,7 +3,7 @@
 const cors = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,HEAD,POST,OPTIONS",
-  "access-control-allow-headers": "Content-Type,Accept",
+  "access-control-allow-headers": "Content-Type,Accept,Authorization",
   "access-control-max-age": "86400",
   "vary": "Origin"
 };
@@ -154,6 +154,88 @@ async function proxyDeepSeek(request, env) {
   });
 }
 
+
+const ADHD_SKILL_URL = "https://raw.githubusercontent.com/Yihuan21/i-have-adhd/main/skills/i-have-adhd/SKILL.md";
+
+async function loadAdhdSkill() {
+  const response = await fetch(ADHD_SKILL_URL, {
+    headers: { "Accept": "text/plain" },
+    cf: { cacheTtl: 300, cacheEverything: true }
+  });
+  if (!response.ok) throw new Error("SKILL.md fetch failed: " + response.status);
+  const markdown = await response.text();
+  const skill = markdown.replace(/^---\s*\n[\s\S]*?\n---\s*\n/, "").trim();
+  if (!skill || skill.length > 30000) throw new Error("SKILL.md is empty or unexpectedly large");
+  return skill;
+}
+
+async function proxyChat(request, env) {
+  if (!env?.ADHD_CHAT_API_KEY) return json({ error: "AI chat endpoint is not configured" }, 503);
+  const authorization = request.headers.get("Authorization") || "";
+  if (authorization !== "Bearer " + env.ADHD_CHAT_API_KEY) return json({ error: "Unauthorized" }, 401);
+
+  let body;
+  try { body = await request.json(); }
+  catch { return json({ error: "请求 JSON 无效" }, 400); }
+
+  if (!Array.isArray(body?.messages) || body.messages.length < 1 || body.messages.length > 100) {
+    return json({ error: "messages 必须是 1-100 条的数组" }, 400);
+  }
+  const allowedRoles = new Set(["system", "developer", "user", "assistant"]);
+  const messages = body.messages.map(message => {
+    if (!message || !allowedRoles.has(message.role) || message.content === undefined || message.content === null) {
+      throw new Error("INVALID_MESSAGES");
+    }
+    return { role: message.role, content: message.content };
+  });
+
+  const adhdMode = body.adhdMode === true;
+  if (adhdMode) {
+    let skill;
+    try { skill = await loadAdhdSkill(); }
+    catch (error) {
+      return json({ error: "无法读取 i-have-adhd 的 SKILL.md", detail: String(error?.message || error) }, 502);
+    }
+    const existingSystem = messages.find(message => message.role === "system" && typeof message.content === "string");
+    if (existingSystem) {
+      existingSystem.content = skill + "\n\n---\n\nAdditional system instructions from the caller:\n" + existingSystem.content;
+    } else {
+      messages.unshift({ role: "system", content: skill });
+    }
+  }
+
+  const model = typeof body.model === "string" && /^[a-zA-Z0-9._-]{1,80}$/.test(body.model)
+    ? body.model : "deepseek-chat";
+  const temperature = Number.isFinite(Number(body.temperature))
+    ? Math.max(0, Math.min(2, Number(body.temperature))) : 0.7;
+  const maxTokens = Number.isFinite(Number(body.max_tokens))
+    ? Math.max(16, Math.min(4096, Math.floor(Number(body.max_tokens)))) : 1200;
+
+  let upstreamResponse;
+  try {
+    upstreamResponse = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + env.DEEPSEEK_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: false })
+    });
+  } catch (error) {
+    return json({ error: "AI 上游请求失败", detail: String(error?.message || error).slice(0, 300) }, 502);
+  }
+  const raw = await upstreamResponse.text();
+  return new Response(raw, {
+    status: upstreamResponse.status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-adhd-mode": adhdMode ? "on" : "off",
+      ...cors
+    }
+  });
+}
+
 async function proxyFund(params) {
   const target = new URL("https://api.fund.eastmoney.com/f10/lsjz");
   for (const [key, value] of Object.entries(params)) {
@@ -187,6 +269,18 @@ export default {
       if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
       return proxyDeepSeek(request, env);
     }
+    if (u.pathname === "/api/chat") {
+      if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+      if (!env?.DEEPSEEK_API_KEY) return json({ error: "AI provider is not configured" }, 503);
+      try {
+        return await proxyChat(request, env);
+      } catch (error) {
+        if (String(error?.message || error) === "INVALID_MESSAGES") {
+          return json({ error: "messages 中的 role 或 content 无效" }, 400);
+        }
+        return json({ error: "AI chat request failed", detail: String(error?.message || error).slice(0, 300) }, 500);
+      }
+    }
     if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
 
     if (u.pathname === "/api/health") {
@@ -197,7 +291,7 @@ export default {
         worker: "acc-api",
         version: "2026-09-30",
         time: new Date().toISOString(),
-        endpoints: ["/api/health", "/api/yahoo", "/api/fund", "/api/assistant"]
+        endpoints: ["/api/health", "/api/yahoo", "/api/fund", "/api/assistant", "/api/chat"]
       };
       if (deep) {
         const yahoo = await upstream(
@@ -243,7 +337,7 @@ export default {
     return json({
       ok: true,
       service: "acc-api",
-      endpoints: ["/api/health", "/api/yahoo", "/api/fund", "/api/assistant"]
+      endpoints: ["/api/health", "/api/yahoo", "/api/fund", "/api/assistant", "/api/chat"]
     });
   }
 };
