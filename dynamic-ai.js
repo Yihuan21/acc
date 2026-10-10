@@ -17,6 +17,30 @@ function indicators(prefix){
   const atrPct=last>0?mean(tr)/last:0;
   return {last,ma20,ma50,ma60,rsi:r,rsiPrev:rPrev,ret5,ret20,lower,atrPct,trendUp:ma20>ma50&&ma50>0,oversoldBounce:rPrev<32&&r>=32&&last>prefix[n-2]?.close,nearLowerBand:last<=lower*1.015};
 }
+function localQuantDecision(prefix,activeTarget){
+  if(prefix.length<60)return {targetExposure:0,reason:"本地量化：历史不足60个交易日，暂不建仓"};
+  const x=indicators(prefix),c=prefix.map(b=>b.close),last=c.at(-1);
+  const ma10=mean(c.slice(-10)),ma20=x.ma20,ma50=x.ma50,ma100=mean(c.slice(-100));
+  const ret60=c.length>60?last/c[c.length-61]-1:0;
+  const high20=Math.max(...c.slice(-20)),low20=Math.min(...c.slice(-20));
+  const trend=(last>ma20?1:-1)+(ma20>ma50?1:-1)+(ma50>ma100?1:-1);
+  const momentum=(x.ret5>0?1:-1)+(x.ret20>0?1:-1)+(ret60>0?1:-1);
+  let score=trend*.8+momentum*.55;
+  if(x.rsi<28&&x.rsiPrev<x.rsi)score-=.6;
+  if(x.oversoldBounce)score+=1.5;
+  if(x.nearLowerBand&&x.rsi<35&&x.ret5>-.06)score+=.6;
+  if(last>high20*.995&&x.ret20>0)score+=.7;
+  if(x.atrPct>.045)score-=1;
+  if(x.atrPct>.07)return {targetExposure:.1,reason:"本地集成量化：ATR波动率极高，强制压低仓位"};
+  if(x.ret20<-.15&&last<ma50)return {targetExposure:0,reason:"本地集成量化：中期动量深度为负且低于50日均线，避免盲目接下跌刀"};
+  if(x.oversoldBounce)return {targetExposure:.18,reason:"本地集成量化：RSI超卖后回升并获得价格确认，启动18%分批抄底仓位"};
+  if(x.nearLowerBand&&x.rsi<32&&x.ret5>-.08)return {targetExposure:.1,reason:"本地集成量化：布林下轨、RSI与短期跌幅联合确认，10%均值回归试仓"};
+  if(score>=3)return {targetExposure:.65,reason:"本地集成量化：中长期趋势、动量与突破信号共振，目标仓位65%"};
+  if(score>=1.5)return {targetExposure:.45,reason:"本地集成量化：趋势与动量偏多，目标仓位45%"};
+  if(score>=0)return {targetExposure:.25,reason:"本地集成量化：信号混合，保持25%观察仓位"};
+  if(last>ma10&&x.ret5>0)return {targetExposure:.15,reason:"本地集成量化：短线反弹但中期偏弱，仅保留15%试探仓位"};
+  return {targetExposure:Math.min(activeTarget,.08),reason:"本地集成量化：趋势与动量偏空，仓位收缩至不超过8%"};
+}
 function localFallback(prefix,activeTarget){
   if(prefix.length<60)return {targetExposure:0,reason:"历史长度不足60个交易日，暂不建仓"};
   const x=indicators(prefix);
@@ -28,14 +52,14 @@ function localFallback(prefix,activeTarget){
   if(x.last<x.ma50&&x.ret20<-.08)return {targetExposure:0,reason:"本地量化：中期趋势和动量仍弱，保持现金等待止跌确认"};
   return {targetExposure:Math.min(activeTarget,.25),reason:"本地量化：趋势信号不一致，限制仓位等待更清晰的方向"};
 }
-export async function runDynamicAISimulation(bars,{capital=100000,apiBase,requestAI,feeRate=.0005,slippage=.0005,decisionEvery=5,monthlyReview=true,onProgress=()=>{}}={}){
+export async function runDynamicAISimulation(bars,{capital=100000,apiBase,requestAI,feeRate=.0005,slippage=.0005,decisionEvery=5,decisionMode="local",monthlyReview=true,onProgress=()=>{}}={}){
   const clean=(Array.isArray(bars)?bars:[])
     .map(b=>({...b,date:String(b.date||"").slice(0,10),open:Number(b.open),high:Number(b.high),low:Number(b.low),close:Number(b.close)}))
     .filter(b=>/^\d{4}-\d{2}-\d{2}$/.test(b.date)&&b.open>0&&b.close>0)
     .sort((a,b)=>a.date.localeCompare(b.date))
     .filter((b,i,a)=>!i||b.date!==a[i-1].date);
   if(clean.length<100)throw new Error("动态模拟至少需要100个交易日");
-  let cash=Number(capital),qty=0,peak=cash,riskPeak=cash,lastDecision=-99,lastTrainMonth="",activeTarget=0,activeReason="尚未产生AI决策",lastAIStatus="待决策";
+  let cash=Number(capital),qty=0,peak=cash,riskPeak=cash,lastDecision=-99,lastTrainMonth="",activeTarget=0,activeReason="尚未产生本地量化决策",lastAIStatus=decisionMode==="local"?"本地量化模式（无AI API调用）":"待决策",apiCalls=0;
   let riskPaused=false,cooldownUntil=-1,recoveryStage=0,riskEvents=0;
   const initial=cash,decisions=[],trades=[],curve=[],reviews=[];
   for(let i=1;i<clean.length;i++){
@@ -60,41 +84,46 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
         riskPaused=false;recoveryStage=1;activeTarget=.1;activeReason="回撤后超卖试仓：布林下轨与RSI双重确认，先恢复10%仓位";riskChanged=true;decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:activeTarget,reason:activeReason,ai:false,status:"分阶段重新入场",monthlyReview:false,trainingBars:prev.length,reentry:true});lastDecision=i;
       }
     }
-    const scheduled=i-lastDecision>=Math.max(1,decisionEvery);
+    const effectiveDecisionEvery=decisionMode==="local"?5:decisionMode==="hybrid"?20:Math.max(1,decisionEvery);
+    const scheduled=i-lastDecision>=effectiveDecisionEvery;
     if(scheduled&&!riskPaused){
       let decision,aiOk=false;
-      const doMonthly=monthlyReview&&month!==lastTrainMonth&&prev.length>=120;
+      const doMonthly=monthlyReview&&decisionMode!=="local"&&month!==lastTrainMonth&&prev.length>=120;
       let monthlyOptimization=null;
       if(doMonthly){try{monthlyOptimization=optimizeAIStrategy(prev.slice(-1200),{capital,feeRate,slippage})}catch{monthlyOptimization=null}}
-      try{
-        if(prev.length<60)throw new Error("历史数据尚不足60个交易日，先使用本地安全规则");
-        if(typeof requestAI!=="function")throw new Error("AI请求函数不可用");
-        const accountEquity=cash+qty*prev.at(-1).close;
-        const answer=await requestAI(apiBase,{
-          mode:"dynamic_decision",symbol:"",assetType:"auto",asOfDate:prev.at(-1).date,trainingBars:prev.slice(-1200),
-          account:{cash,equity:accountEquity,quantity:qty,exposurePct:qty*prev.at(-1).close/Math.max(1,accountEquity)*100,peakEquity:peak,currentDrawdownPct:peak>0?(peak-accountEquity)/peak*100:0,riskPaused,recoveryStage,indicators:{rsi:signal.rsi,ma20:signal.ma20,ma50:signal.ma50,momentum5Pct:signal.ret5*100,momentum20Pct:signal.ret20*100,atrPct:signal.atrPct*100}},
-          monthlyReview:doMonthly,
-          monthlyOptimization:monthlyOptimization?.ok?{tested:monthlyOptimization.tested,validationRange:monthlyOptimization.validationRange,candidates:monthlyOptimization.top.slice(0,5).map(x=>({strategy:x.config.strategy,score:x.score,returnPct:x.returnPct,maxDrawdownPct:x.maxDrawdownPct}))}:null,
-          previousDecision:activeReason
-        });
-        decision=answer?.decision;
-        if(!decision||!Number.isFinite(Number(decision.targetExposure)))throw new Error("AI未返回有效目标仓位");
-        aiOk=true;
-        if(doMonthly)reviews.push({date:prev.at(-1).date,status:"候选参数已检查",reason:String(decision.monthlyReview||"使用当时及之前的历史数据检查策略候选；这不是模型权重再训练。")});
-      }catch(error){
-        decision=localFallback(prev,activeTarget);
-        if(doMonthly)reviews.push({date:prev.at(-1).date,status:"API失败，采用本地规则",reason:String(error?.message||error)});
+      if(decisionMode==="local"){
+        decision=localQuantDecision(prev,activeTarget);
+      }else{
+        try{
+          if(prev.length<60)throw new Error("历史数据尚不足60个交易日，先使用本地安全规则");
+          if(typeof requestAI!=="function")throw new Error("AI请求函数不可用");
+          const accountEquity=cash+qty*prev.at(-1).close;
+          const answer=await requestAI(apiBase,{
+            mode:"dynamic_decision",symbol:"",assetType:"auto",asOfDate:prev.at(-1).date,trainingBars:prev.slice(-1200),
+            account:{cash,equity:accountEquity,quantity:qty,exposurePct:qty*prev.at(-1).close/Math.max(1,accountEquity)*100,peakEquity:peak,currentDrawdownPct:peak>0?(peak-accountEquity)/peak*100:0,riskPaused,recoveryStage,indicators:{rsi:signal.rsi,ma20:signal.ma20,ma50:signal.ma50,momentum5Pct:signal.ret5*100,momentum20Pct:signal.ret20*100,atrPct:signal.atrPct*100}},
+            monthlyReview:doMonthly,
+            monthlyOptimization:monthlyOptimization?.ok?{tested:monthlyOptimization.tested,validationRange:monthlyOptimization.validationRange,candidates:monthlyOptimization.top.slice(0,5).map(x=>({strategy:x.config.strategy,score:x.score,returnPct:x.returnPct,maxDrawdownPct:x.maxDrawdownPct}))}:null,
+            previousDecision:activeReason
+          });
+          apiCalls++;
+          decision=answer?.strategy?.decision||answer?.decision;
+          if(!decision||!Number.isFinite(Number(decision.targetExposure)))throw new Error("AI未返回有效目标仓位");
+          aiOk=true;
+          if(doMonthly)reviews.push({date:prev.at(-1).date,status:"候选参数已检查",reason:String(decision.monthlyReview||"使用当时及之前的历史数据检查策略候选；这不是模型权重再训练。")});
+        }catch(error){
+          decision=localQuantDecision(prev,activeTarget);
+          if(doMonthly)reviews.push({date:prev.at(-1).date,status:"API失败，采用本地规则",reason:String(error?.message||error)});
+        }
       }
       if(doMonthly)lastTrainMonth=month;
-      // Local risk overlay caps model exposure in high-volatility/weak-trend regimes.
       let proposed=Math.max(0,Math.min(.7,Number(decision.targetExposure)||0));
       if(signal.atrPct>.06)proposed=Math.min(proposed,.2);
       else if(!signal.trendUp&&signal.last<signal.ma50)proposed=Math.min(proposed,.35);
       if(signal.oversoldBounce||signal.nearLowerBand&&signal.rsi<32)proposed=Math.min(proposed,.25);
       activeTarget=proposed;
       activeReason=String(decision.reason||"未提供决策理由").slice(0,500);
-      lastDecision=i;lastAIStatus=aiOk?"AI决策":"本地规则降级";
-      decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:activeTarget,reason:activeReason,ai:aiOk,status:lastAIStatus,monthlyReview:doMonthly,trainingBars:prev.length,indicators:{rsi:signal.rsi,ma20:signal.ma20,ma50:signal.ma50,momentum5Pct:signal.ret5*100,momentum20Pct:signal.ret20*100,atrPct:signal.atrPct*100}});
+      lastDecision=i;lastAIStatus=aiOk?"AI决策":decisionMode==="local"?"本地量化决策":"本地量化降级";
+      decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:activeTarget,reason:activeReason,ai:aiOk,status:lastAIStatus,monthlyReview:doMonthly,trainingBars:prev.length,decisionMode,indicators:{rsi:signal.rsi,ma20:signal.ma20,ma50:signal.ma50,momentum5Pct:signal.ret5*100,momentum20Pct:signal.ret20*100,atrPct:signal.atrPct*100}});
     }else if(scheduled&&riskPaused){
       // Advance the schedule without querying the model while the risk gate is intentionally paused.
       lastDecision=i;
@@ -127,5 +156,5 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
     onProgress({index:i,total:clean.length,date:bar.date,decisions:decisions.length,trades:trades.length});
   }
   const final=curve.at(-1)?.equity??cash,maxDrawdownPct=Math.max(0,...curve.map(x=>x.drawdownPct)),fees=trades.reduce((s,x)=>s+x.fee,0),benchmarkPct=(clean.at(-1).close/clean[1].open-1)*100;
-  return {symbol:"",bars:clean,capital:initial,final,profit:final-initial,returnPct:(final/initial-1)*100,benchmarkPct,excessPct:(final/initial-1)*100-benchmarkPct,maxDrawdownPct,fees,trades,decisions,curve,reviews,apiStatus:lastAIStatus,riskEvents,settings:{decisionEvery,monthlyReview,execution:"next_open",maxExposurePct:70,drawdownLimitPct:20,cooldownTradingDays:10,reentry:"staged confirmation + oversold rebound"},leakageGuard:{executionUsesNextOpen:true,decisionBarsEndBeforeExecution:true,latestDecisionDate:decisions.at(-1)?.date||null}};
+  return {symbol:"",bars:clean,capital:initial,final,profit:final-initial,returnPct:(final/initial-1)*100,benchmarkPct,excessPct:(final/initial-1)*100-benchmarkPct,maxDrawdownPct,fees,trades,decisions,curve,reviews,apiStatus:lastAIStatus,apiCalls,riskEvents,settings:{decisionMode,decisionEvery:decisionMode==="local"?5:decisionMode==="hybrid"?20:decisionEvery,monthlyReview:decisionMode!=="local"&&monthlyReview,execution:"next_open",maxExposurePct:70,drawdownLimitPct:20,cooldownTradingDays:10,reentry:"staged confirmation + oversold rebound"},leakageGuard:{executionUsesNextOpen:true,decisionBarsEndBeforeExecution:true,latestDecisionDate:decisions.at(-1)?.date||null}};
 }
