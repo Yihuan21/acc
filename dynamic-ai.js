@@ -47,7 +47,8 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
     let target=activeTarget;
     if(dd>=.2)target=0; // deterministic portfolio-level drawdown gate
     const targetValue=Math.max(0,equity*target),currentValue=qty*open,diff=targetValue-currentValue;
-    if(Math.abs(diff)>Math.max(1,equity*.03)){
+    const scheduledRebalance=decisions.at(-1)?.executionDate===bar.date;
+    if((scheduledRebalance||dd>=.2)&&Math.abs(diff)>Math.max(1,equity*.03)){
       if(diff>0&&cash>0){
         const budget=Math.min(cash,diff),px=open*(1+slippage),fee=budget*feeRate;
         const bought=Math.max(0,(budget-fee)/px);
