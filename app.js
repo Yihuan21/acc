@@ -3,6 +3,7 @@ import {runBacktest} from "./backtest.js?v=20260930-13";
 import {strategyLabel,generateStrategyPlan} from "./strategy-engine.js?v=20260930-13";
 import {diagnoseRSIReversal} from "./rsi-diagnostic.js?v=20261001-01";
 import {requestAIStrategy,evaluateAIWalkForward,optimizeAIStrategy,robustifyAIStrategy} from "./ai-strategy.js?v=20261003-04";
+import {runDynamicAISimulation} from "./dynamic-ai.js?v=20261010-01";
 import {createSimulation,currentBar,visibleBars,stepSimulation,jumpSimulationToDate,executeSimulationTrade,simulationEquity,simulationReturn} from "./simulation.js?v=20260930-13";
 const __bootError=(e)=>{console.error(e);try{const t=document.querySelector("#toast");if(t){t.textContent="交互模块加载异常，请刷新页面";t.classList.add("show")}}catch{}};
 window.addEventListener("error",e=>__bootError(e));
@@ -372,7 +373,26 @@ async function runAIStrategyAssistant(){
 
   }finally{setButtonBusy(btn,false)}
 }
-$("#aiRunBtn")?.addEventListener("click",runAIStrategyAssistant);
+async function runDynamicAIStrategy(){
+  const raw=$("#aiSymbol").value.trim(),t=assetType($("#aiType").value),a=$("#aiStart").value,b=$("#aiEnd").value,capital=Math.max(1,Number($("#aiCapital").value)||100000),btn=$("#aiRunBtn");
+  if(!raw||!a||!b||a>=b)return toast("请填写正确的动态模拟区间");
+  setButtonBusy(btn,true,"正在逐时点模拟动态决策…");
+  try{
+    const bars=await history(sym(raw,t),a,b,t);
+    const report=await runDynamicAISimulation(bars,{capital,apiBase:state.settings.apiBase,requestAI,decisionEvery:5,monthlyReview:true,onProgress:p=>{if(p.index%25===0)btn.textContent="动态模拟 "+p.date+" · 决策 "+p.decisions+" 次"}});
+    const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
+    const metrics=[["期末资产",money(report.final,currency)],["累计收益",report.returnPct.toFixed(2)+"%"],["买入持有基准",report.benchmarkPct.toFixed(2)+"%"],["超额收益",(report.excessPct>=0?"+":"")+report.excessPct.toFixed(2)+"%"],["最大回撤",report.maxDrawdownPct.toFixed(2)+"%"],["交易成本",money(report.fees,currency)],["决策次数",report.decisions.length+" 次"],["成交次数",report.trades.length+" 笔"]].map(x=>'<div><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join("");
+    const decisionRows=report.decisions.slice().reverse().slice(0,100).map(x=>'<div class="row ai-decision-row"><span><b>'+esc(x.executionDate)+' · 目标仓位 '+(x.targetExposure*100).toFixed(0)+'%</b><small>信息截止 '+esc(x.date)+' · '+esc(x.status)+(x.monthlyReview?' · 月度检查':'')+'</small></span><span>'+esc(x.reason)+'</span></div>').join("")||'<div class="empty">没有决策记录</div>';
+    const tradeRows=report.trades.slice().reverse().slice(0,100).map(x=>'<div class="row strategy-trade-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"买入":"卖出")+' · '+esc(x.date)+'</b><small>'+num(x.qty)+' × '+num(x.price)+' · 费用 '+num(x.fee)+' · '+esc(x.reason)+'</small></span><span>'+money(x.gross,currency)+'</span></div>').join("")||'<div class="empty">没有触发再平衡交易</div>';
+    const reviews=report.reviews.map(x=>'<div class="row"><span><b>'+esc(x.date)+' · '+esc(x.status)+'</b><small>'+esc(x.reason)+'</small></span></div>').join("")||'<div class="empty">历史区间内没有足够数据进行月度检查</div>';
+    const curve='<div class="chart-wrap"><svg viewBox="0 0 900 240" role="img" aria-label="动态组合权益曲线"><polyline fill="none" stroke="currentColor" stroke-width="2" points="'+report.curve.map((x,i)=>{const min=Math.min(...report.curve.map(y=>y.equity)),max=Math.max(...report.curve.map(y=>y.equity)),px=12+i*876/Math.max(1,report.curve.length-1),py=220-(x.equity-min)/(max-min||1)*200;return px.toFixed(1)+","+py.toFixed(1)}.join(" ")+'"/></svg></div>';
+    $("#aiResult").classList.remove("empty");
+    $("#aiResult").innerHTML='<section class="ai-report-block"><div class="ai-report-title"><b>① 动态投资表现</b><span class="strategy-badge">每5个交易日重新决策</span></div><div class="ai-return-grid">'+metrics+'</div>'+curve+'<p class="muted">执行：信号在前一交易日收盘后形成，下一交易日开盘按目标仓位再平衡；最大目标仓位70%，组合回撤达到20%时目标仓位降为0。API失败采用本地量化规则安全降级。</p><p><b>数据隔离检查：</b> '+(report.leakageGuard.executionUsesNextOpen&&report.leakageGuard.decisionBarsEndBeforeExecution?"通过：决策信息截止日早于成交日。":"需要检查时间边界。")+'</p><p><b>最近状态：</b> '+esc(report.apiStatus)+'</p></section><section class="ai-report-block"><div class="ai-report-title"><b>② 每次动态决策</b><span class="muted">信息截止日 / 执行日分离</span></div><div class="ai-decision-list">'+decisionRows+'</div></section><section class="ai-report-block"><div class="ai-report-title"><b>③ 实际模拟成交</b><span class="muted">含手续费与滑点</span></div>'+tradeRows+'</section><section class="ai-report-block"><div class="ai-report-title"><b>④ 月度模型检查</b><span class="muted">只使用当时及之前的数据</span></div>'+reviews+'</section>';
+    toast("动态 AI 模拟完成；API异常时已自动降级");
+  }catch(e){console.error(e);$("#aiResult").innerHTML='<div class="panel"><b>动态模拟失败</b><p>'+esc(e?.message||e)+'</p></div>';toast("动态模拟失败："+(e?.message||e))}
+  finally{setButtonBusy(btn,false)}
+}
+$("#aiRunBtn")?.addEventListener("click",runDynamicAIStrategy);
 
 async function runRSIDiagnostic(){
   const raw=$("#rsiDiagSymbol").value.trim()||$("#btSymbol").value.trim(),t=assetType($("#rsiDiagType").value),a=$("#rsiDiagStart").value||$("#btStart").value,b=$("#rsiDiagEnd").value||$("#btEnd").value;
