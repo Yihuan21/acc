@@ -45,7 +45,7 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
     const totalDD=peak>0?(peak-equityAtOpen)/peak:0;
     // Trigger once per recovery cycle. Reset the local risk anchor after a circuit-breaker event,
     // otherwise the old all-time high would repeatedly force the portfolio back to zero.
-    if(!riskPaused&&totalDD>=.20){
+    if(!riskPaused&&riskEvents===0&&totalDD>=.20){
       riskPaused=true;cooldownUntil=i+10;recoveryStage=0;riskPeak=equityAtOpen;riskEvents++;riskChanged=true;
       activeTarget=0;activeReason="组合回撤达到20%，启动10个交易日冷静期；冷静期后需出现止跌/趋势确认才分阶段重入";
       decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:0,reason:activeReason,ai:false,status:"组合回撤保护",monthlyReview:false,trainingBars:prev.length,riskEvent:true});
@@ -53,11 +53,11 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
     // Re-entry is explicit and staged, based only on the prior close history.
     if(riskPaused&&i>=cooldownUntil){
       if(signal.oversoldBounce){
-        riskPaused=false;recoveryStage=1;activeTarget=.15;activeReason="回撤后抄底试仓：RSI从超卖区回升并有价格确认，先恢复15%仓位";riskChanged=true;
+        riskPaused=false;recoveryStage=1;activeTarget=.15;activeReason="回撤后抄底试仓：RSI从超卖区回升并有价格确认，先恢复15%仓位";riskChanged=true;decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:activeTarget,reason:activeReason,ai:false,status:"分阶段重新入场",monthlyReview:false,trainingBars:prev.length,reentry:true});lastDecision=i;
       }else if(signal.last>signal.ma20&&signal.ret5>0){
-        riskPaused=false;recoveryStage=1;activeTarget=.2;activeReason="回撤后趋势恢复：收盘价站回20日均线且5日动量转正，先恢复20%仓位";riskChanged=true;
+        riskPaused=false;recoveryStage=1;activeTarget=.2;activeReason="回撤后趋势恢复：收盘价站回20日均线且5日动量转正，先恢复20%仓位";riskChanged=true;decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:activeTarget,reason:activeReason,ai:false,status:"分阶段重新入场",monthlyReview:false,trainingBars:prev.length,reentry:true});lastDecision=i;
       }else if(signal.nearLowerBand&&signal.rsi<32&&signal.ret5>-.08){
-        riskPaused=false;recoveryStage=1;activeTarget=.1;activeReason="回撤后超卖试仓：布林下轨与RSI双重确认，先恢复10%仓位";riskChanged=true;
+        riskPaused=false;recoveryStage=1;activeTarget=.1;activeReason="回撤后超卖试仓：布林下轨与RSI双重确认，先恢复10%仓位";riskChanged=true;decisions.push({date:prev.at(-1).date,executionDate:bar.date,targetExposure:activeTarget,reason:activeReason,ai:false,status:"分阶段重新入场",monthlyReview:false,trainingBars:prev.length,reentry:true});lastDecision=i;
       }
     }
     const scheduled=i-lastDecision>=Math.max(1,decisionEvery);
