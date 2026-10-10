@@ -36,6 +36,7 @@ test("dynamic simulation accepts ISO dates and never sends the execution bar to 
 test("20% drawdown protection permits staged re-entry after cooldown and confirmation",async()=>{
   const report=await runDynamicAISimulation(bars(),{
     capital:100000,
+    decisionMode:"ai",
     decisionEvery:5,
     monthlyReview:false,
     requestAI:async()=>({decision:{targetExposure:.7,reason:"mock AI decision"}})
