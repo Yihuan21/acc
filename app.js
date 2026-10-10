@@ -362,7 +362,7 @@ async function runAIStrategyAssistant(){
       '<section class="ai-report-block"><div class="ai-report-title"><b>⑤ 回测复盘</b><span class="muted">回测结束后由本地引擎生成</span></div><div class="ai-review-list">'+reviewRows+'</div><div class="ai-review-stats"><div><small>最好单笔</small><b class="positive">'+(r.closedTrades?r.bestTradeReturnPct.toFixed(2)+"%":"—")+'</b></div><div><small>最差单笔</small><b class="negative">'+(r.closedTrades?r.worstTradeReturnPct.toFixed(2)+"%":"—")+'</b></div><div><small>测试区间</small><b>'+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+'</b></div><div><small>训练 / 测试</small><b>'+trainingBars.length+' / '+testBars.length+' 日</b></div></div></section>'+
       '<div class="risk-status safe">✓ 信息隔离：DeepSeek 只接收训练区间 '+esc(trainingBars[0].date)+' → '+esc(trainingBars.at(-1).date)+'；测试区间 '+esc(testBars[0].date)+' → '+esc(testBars.at(-1).date)+' 没有发送给 AI。复盘使用的是测试结束后的本地历史结果，不会反向参与策略选择。</div>';
     bindKlineInteraction($("#aiResult .kline-interactive"),testBars,"daily");
-    toast("AI策略研究、回报分析和复盘完成");
+    toast((report.apiCalls===0?"本地量化完成，无AI API费用；":"动态模拟完成，AI调用 "+report.apiCalls+" 次；")+"回报分析已生成");
   }catch(e){
     console.error("AI策略助手失败",{phase:aiPhase,error:e});
     const rawMessage=String(e?.message||e||"未知错误");
@@ -379,9 +379,9 @@ async function runDynamicAIStrategy(){
   setButtonBusy(btn,true,"正在逐时点模拟动态决策…");
   try{
     const bars=await history(sym(raw,t),a,b,t);
-    const report=await runDynamicAISimulation(bars,{capital,apiBase:state.settings.apiBase,requestAI:requestAIStrategy,decisionEvery:5,monthlyReview:true,onProgress:p=>{if(p.index%25===0)btn.textContent="动态模拟 "+p.date+" · 决策 "+p.decisions+" 次"}});
+    const decisionMode=$("#aiDecisionMode")?.value||"local";const report=await runDynamicAISimulation(bars,{capital,apiBase:state.settings.apiBase,requestAI:requestAIStrategy,decisionMode,decisionEvery:5,monthlyReview:true,onProgress:p=>{if(p.index%25===0)btn.textContent="动态模拟 "+p.date+" · 决策 "+p.decisions+" 次"}});
     const currency=isAShareStock(raw,t)||t==="fund"?"CNY":"USD";
-    const metrics=[["期末资产",money(report.final,currency)],["累计收益",report.returnPct.toFixed(2)+"%"],["买入持有基准",report.benchmarkPct.toFixed(2)+"%"],["超额收益",(report.excessPct>=0?"+":"")+report.excessPct.toFixed(2)+"%"],["最大回撤",report.maxDrawdownPct.toFixed(2)+"%"],["交易成本",money(report.fees,currency)],["决策次数",report.decisions.length+" 次"],["成交次数",report.trades.length+" 笔"]].map(x=>'<div><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join("");
+    const metrics=[["期末资产",money(report.final,currency)],["累计收益",report.returnPct.toFixed(2)+"%"],["买入持有基准",report.benchmarkPct.toFixed(2)+"%"],["超额收益",(report.excessPct>=0?"+":"")+report.excessPct.toFixed(2)+"%"],["最大回撤",report.maxDrawdownPct.toFixed(2)+"%"],["交易成本",money(report.fees,currency)],["决策次数",report.decisions.length+" 次"],["成交次数",report.trades.length+" 笔"],["AI API调用",report.apiCalls+" 次"]].map(x=>'<div><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join("");
     const decisionRows=report.decisions.slice().reverse().slice(0,100).map(x=>'<div class="row ai-decision-row"><span><b>'+esc(x.executionDate)+' · 目标仓位 '+(x.targetExposure*100).toFixed(0)+'%</b><small>信息截止 '+esc(x.date)+' · '+esc(x.status)+(x.monthlyReview?' · 月度检查':'')+'</small></span><span>'+esc(x.reason)+'</span></div>').join("")||'<div class="empty">没有决策记录</div>';
     const tradeRows=report.trades.slice().reverse().slice(0,100).map(x=>'<div class="row strategy-trade-row"><span><b class="'+(x.side==="buy"?"positive":"negative")+'">'+(x.side==="buy"?"买入":"卖出")+' · '+esc(x.date)+'</b><small>'+num(x.qty)+' × '+num(x.price)+' · 费用 '+num(x.fee)+' · '+esc(x.reason)+'</small></span><span>'+money(x.gross,currency)+'</span></div>').join("")||'<div class="empty">没有触发再平衡交易</div>';
     const reviews=report.reviews.map(x=>'<div class="row"><span><b>'+esc(x.date)+' · '+esc(x.status)+'</b><small>'+esc(x.reason)+'</small></span></div>').join("")||'<div class="empty">历史区间内没有足够数据进行月度检查</div>';
