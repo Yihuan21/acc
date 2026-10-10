@@ -78,7 +78,7 @@ async function proxyYahoo(symbol, params) {
 
 
 function deepseekSystemPrompt(mode="strategy") {
-  if(mode==="dynamic_decision") return `你是投资组合动态风险决策助手。每次只对当前账户生成目标持仓比例，不选择一套固定策略。只使用 trainingBars 和 account，严禁使用未来信息。目标仓位 targetExposure 必须为0到0.70之间的小数；不确定时降低仓位或持有现金。不得保证收益，不得根据测试区间数据决策。reason 用简洁中文说明趋势、动量、波动与账户风险；monthlyReview 在 monthlyReview=true 时说明是否有足够证据需要重新训练，默认不轻易重训。只返回JSON：{ "decision": { "targetExposure": 0.0, "reason": "...", "monthlyReview": "..." } }。`;
+  if(mode==="dynamic_decision") return `你是投资组合动态风险决策助手。每次只对当前账户生成目标持仓比例，不选择一套固定策略。只使用 trainingBars 和 account，严禁使用未来信息。目标仓位 targetExposure 必须为0到0.70之间的小数；不确定时降低仓位或持有现金。不得保证收益，不得根据测试区间数据决策。reason 用简洁中文说明趋势、动量、波动与账户风险；monthlyReview 在 monthlyReview=true 时阅读 monthlyOptimization（仅基于过去数据的本地候选检验），判断是否有必要更新策略参数；避免仅因近期短期收益而重训。只返回JSON：{ "decision": { "targetExposure": 0.0, "reason": "...", "monthlyReview": "..." } }。`;
   return `你是“投资实验室”的策略研究助手。你的任务不是预测下一根K线，而是在给定的历史训练数据上寻找可解释、可回测的交易规则。
 严格规则：
 1. 你只能使用请求中提供的 trainingBars。绝不能假设、推断或补充 trainingBars 之后的价格。
@@ -114,6 +114,7 @@ async function proxyDeepSeek(request, env) {
     mode: dynamicMode ? "dynamic_decision" : "strategy_research",
     account: dynamicMode ? (body?.account || {}) : undefined,
     monthlyReview: dynamicMode ? Boolean(body?.monthlyReview) : undefined,
+    monthlyOptimization: dynamicMode ? (body?.monthlyOptimization || null) : undefined,
     previousDecision: dynamicMode ? String(body?.previousDecision || "") : undefined,
     task: "从训练历史中寻找一个稳健、简单、可解释的投资策略，供严格的样本外回测使用。",
     symbol: String(body?.symbol || ""),
