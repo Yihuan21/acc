@@ -277,3 +277,6 @@ main{min-width:0}
   .ai-decision-row>span{display:block}
   .ai-decision-row>span:last-child{margin-top:7px}
 }
+
+/* AI K-line clarity: exact OHLC and trade details on every selected candle */
+.kline-point-trades{margin-top:8px;padding-top:7px;border-top:1px solid #ffffff20}.kline-point-trades>b{display:block;margin-bottom:5px;color:#edf2ff}.kline-point-trade{padding:4px 0;font-size:12px}.kline-point-trade.buy{color:#38d996}.kline-point-trade.sell{color:#ff5f7d}.kline-point-trade small{display:block;color:#9eabc7;margin-top:2px;white-space:normal}.kline-trade-marker text{paint-order:stroke;stroke:#0b1324;stroke-width:3px;stroke-linejoin:round}.kline-trade-marker.buy text{fill:#38d996;stroke:#0b1324}.kline-trade-marker.sell text{fill:#ff5f7d;stroke:#0b1324}.kline-svg{overflow:visible}
