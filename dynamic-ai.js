@@ -1,3 +1,4 @@
+import {optimizeAIStrategy} from "./ai-strategy.js?v=20261003-04";
 // Dynamic AI portfolio simulation. Decisions see only bars strictly before the execution day.
 export async function runDynamicAISimulation(bars,{capital=100000,apiBase,requestAI,feeRate=.0005,slippage=.0005,decisionEvery=5,monthlyReview=true,onProgress=()=>{}}={}){
   const clean=(Array.isArray(bars)?bars:[]).map(b=>({...b,date:String(b.date||"").slice(0,10),open:Number(b.open),high:Number(b.high),low:Number(b.low),close:Number(b.close)})).filter(b=>/^\\d{4}-\\d{2}-\\d{2}$/.test(b.date)&&b.open>0&&b.close>0).sort((a,b)=>a.date.localeCompare(b.date)).filter((b,i,a)=>!i||b.date!==a[i-1].date);
@@ -19,9 +20,12 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
       let decision,aiOk=false;
       // A model review can only use past bars. A monthly review is an optimization check, not permission to see future prices.
       const doMonthly=monthlyReview&&month!==lastTrainMonth&&prev.length>=120;
+      let monthlyOptimization=null;
+      if(doMonthly){try{monthlyOptimization=optimizeAIStrategy(prev.slice(-1200),{capital,feeRate,slippage})}catch{monthlyOptimization=null}}
       try{
+        if(prev.length<60)throw new Error("历史数据尚不足60个交易日，先使用本地安全规则");
         if(typeof requestAI!=="function")throw new Error("AI请求函数不可用");
-        const payload={mode:"dynamic_decision",symbol:"",assetType:"auto",asOfDate:prev.at(-1).date,trainingBars:prev.slice(-1200),account:{cash,equity:cash+qty*prev.at(-1).close,quantity:qty,exposurePct:(qty*prev.at(-1).close/Math.max(1,cash+qty*prev.at(-1).close))*100,peakEquity:peak,currentDrawdownPct:peak>0?(peak-(cash+qty*prev.at(-1).close))/peak*100:0},monthlyReview:doMonthly,previousDecision:activeReason};
+        const payload={mode:"dynamic_decision",symbol:"",assetType:"auto",asOfDate:prev.at(-1).date,trainingBars:prev.slice(-1200),account:{cash,equity:cash+qty*prev.at(-1).close,quantity:qty,exposurePct:(qty*prev.at(-1).close/Math.max(1,cash+qty*prev.at(-1).close))*100,peakEquity:peak,currentDrawdownPct:peak>0?(peak-(cash+qty*prev.at(-1).close))/peak*100:0},monthlyReview:doMonthly,monthlyOptimization:monthlyOptimization?.ok?{tested:monthlyOptimization.tested,validationRange:monthlyOptimization.validationRange,candidates:monthlyOptimization.top.slice(0,5).map(x=>({strategy:x.config.strategy,score:x.score,returnPct:x.returnPct,maxDrawdownPct:x.maxDrawdownPct}))}:null,previousDecision:activeReason};
         const answer=await requestAI(apiBase,payload);
         decision=answer?.decision;
         if(!decision||!Number.isFinite(Number(decision.targetExposure)))throw new Error("AI未返回有效目标仓位");
