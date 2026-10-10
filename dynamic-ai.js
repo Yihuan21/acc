@@ -98,6 +98,7 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
           if(prev.length<60)throw new Error("历史数据尚不足60个交易日，先使用本地安全规则");
           if(typeof requestAI!=="function")throw new Error("AI请求函数不可用");
           const accountEquity=cash+qty*prev.at(-1).close;
+          apiCalls++;
           const answer=await requestAI(apiBase,{
             mode:"dynamic_decision",symbol:"",assetType:"auto",asOfDate:prev.at(-1).date,trainingBars:prev.slice(-1200),
             account:{cash,equity:accountEquity,quantity:qty,exposurePct:qty*prev.at(-1).close/Math.max(1,accountEquity)*100,peakEquity:peak,currentDrawdownPct:peak>0?(peak-accountEquity)/peak*100:0,riskPaused,recoveryStage,indicators:{rsi:signal.rsi,ma20:signal.ma20,ma50:signal.ma50,momentum5Pct:signal.ret5*100,momentum20Pct:signal.ret20*100,atrPct:signal.atrPct*100}},
@@ -105,7 +106,6 @@ export async function runDynamicAISimulation(bars,{capital=100000,apiBase,reques
             monthlyOptimization:monthlyOptimization?.ok?{tested:monthlyOptimization.tested,validationRange:monthlyOptimization.validationRange,candidates:monthlyOptimization.top.slice(0,5).map(x=>({strategy:x.config.strategy,score:x.score,returnPct:x.returnPct,maxDrawdownPct:x.maxDrawdownPct}))}:null,
             previousDecision:activeReason
           });
-          apiCalls++;
           decision=answer?.strategy?.decision||answer?.decision;
           if(!decision||!Number.isFinite(Number(decision.targetExposure)))throw new Error("AI未返回有效目标仓位");
           aiOk=true;
