@@ -77,7 +77,8 @@ async function proxyYahoo(symbol, params) {
 }
 
 
-function deepseekSystemPrompt() {
+function deepseekSystemPrompt(mode="strategy") {
+  if(mode==="dynamic_decision") return `你是投资组合动态风险决策助手。每次只对当前账户生成目标持仓比例，不选择一套固定策略。只使用 trainingBars 和 account，严禁使用未来信息。目标仓位 targetExposure 必须为0到0.70之间的小数；不确定时降低仓位或持有现金。不得保证收益，不得根据测试区间数据决策。reason 用简洁中文说明趋势、动量、波动与账户风险；monthlyReview 在 monthlyReview=true 时说明是否有足够证据需要重新训练，默认不轻易重训。只返回JSON：{ "decision": { "targetExposure": 0.0, "reason": "...", "monthlyReview": "..." } }。`;
   return `你是“投资实验室”的策略研究助手。你的任务不是预测下一根K线，而是在给定的历史训练数据上寻找可解释、可回测的交易规则。
 严格规则：
 1. 你只能使用请求中提供的 trainingBars。绝不能假设、推断或补充 trainingBars 之后的价格。
@@ -108,7 +109,12 @@ async function proxyDeepSeek(request, env) {
   if (!clean.length || clean.some(x => x.date > asOf)) {
     return json({ error: "数据越界：AI 收到了 asOfDate 之后的数据" }, 400);
   }
+  const dynamicMode = String(body?.mode || "") === "dynamic_decision";
   const userPayload = {
+    mode: dynamicMode ? "dynamic_decision" : "strategy_research",
+    account: dynamicMode ? (body?.account || {}) : undefined,
+    monthlyReview: dynamicMode ? Boolean(body?.monthlyReview) : undefined,
+    previousDecision: dynamicMode ? String(body?.previousDecision || "") : undefined,
     task: "从训练历史中寻找一个稳健、简单、可解释的投资策略，供严格的样本外回测使用。",
     symbol: String(body?.symbol || ""),
     assetType: String(body?.assetType || "auto"),
@@ -131,7 +137,7 @@ async function proxyDeepSeek(request, env) {
       max_tokens: 900,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: deepseekSystemPrompt() },
+        { role: "system", content: deepseekSystemPrompt(dynamicMode ? "dynamic_decision" : "strategy") },
         { role: "user", content: JSON.stringify(userPayload) }
       ]
     })
@@ -144,6 +150,12 @@ async function proxyDeepSeek(request, env) {
   if (!content) return json({ error: "DeepSeek 未返回策略" }, 502);
   let strategy;
   try { strategy = JSON.parse(content); } catch { return json({ error: "DeepSeek 策略不是有效 JSON" }, 502); }
+  if (dynamicMode) {
+    const target = Number(strategy?.decision?.targetExposure);
+    if (!Number.isFinite(target)) return json({ error: "DeepSeek 动态决策缺少有效 targetExposure" }, 502);
+    strategy.decision.targetExposure = Math.max(0, Math.min(0.70, target));
+    strategy.decision.reason = String(strategy.decision.reason || "未提供决策理由").slice(0, 500);
+  }
   return json({
     ok: true,
     provider: "deepseek",
