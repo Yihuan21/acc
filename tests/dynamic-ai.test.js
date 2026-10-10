@@ -18,6 +18,7 @@ test("dynamic simulation accepts ISO dates and never sends the execution bar to 
   const seen=[];
   const report=await runDynamicAISimulation(bars(),{
     capital:100000,
+    decisionMode:"ai",
     decisionEvery:5,
     monthlyReview:false,
     requestAI:async(_base,payload)=>{
@@ -45,4 +46,17 @@ test("20% drawdown protection permits staged re-entry after cooldown and confirm
   const protectionDate=report.decisions[firstProtection].executionDate;
   const reentry=report.trades.find(t=>t.side==="buy"&&t.date>protectionDate&&/试仓|恢复|再平衡/.test(t.reason));
   assert.ok(reentry,"the strategy should be able to buy again after a confirmed recovery");
+});
+
+test("local quant mode makes zero AI API calls",async()=>{
+  let calls=0;
+  const report=await runDynamicAISimulation(bars(),{
+    capital:100000,
+    decisionMode:"local",
+    monthlyReview:true,
+    requestAI:async()=>{calls++;throw new Error("should not be called")}
+  });
+  assert.equal(calls,0);
+  assert.equal(report.apiCalls,0);
+  assert.ok(report.decisions.every(d=>d.decisionMode==="local"||d.status==="组合回撤保护"||d.status==="分阶段重新入场"||d.status==="恢复期风险保护"));
 });
