@@ -1,9 +1,9 @@
-const CACHE_VERSION = "investment-lab-v55";
+const CACHE_VERSION = "investment-lab-v56";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=20261010-05",
-  "./app.js?v=20261010-05",
+  "./styles.css?v=20261015-01",
+  "./app.js?v=20261015-01",
   "./data.js",
   "./backtest.js",
   "./simulation.js","./strategy-engine.js",
